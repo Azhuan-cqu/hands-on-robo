@@ -3,7 +3,7 @@ import unittest
 import cv2
 import numpy as np
 from camera_intrinsic import make_board, detect
-from handeye_calibration import URDFFK, transform, solve
+from handeye_calibration import URDFFK, transform, solve, fit_joint_offsets
 
 
 class CalibrationTests(unittest.TestCase):
@@ -45,6 +45,26 @@ class CalibrationTests(unittest.TestCase):
         self.assertLess(result['board_position_rms_mm'], 1e-6)
         with self.assertRaises(ValueError):
             solve([samples[0]] * 15)
+
+    def test_joint_offset_recovery(self):
+        fk = URDFFK('so101_new_calib.urdf')
+        true = {'shoulder_lift': -7.7, 'elbow_flex': -7.2, 'wrist_flex': -14.8}
+        rng = np.random.default_rng(5)
+        X = transform(cv2.Rodrigues(np.array([.2, -.15, .3]))[0], [.03, -.02, .05])
+        B = transform(cv2.Rodrigues(np.array([.3, .1, -.2]))[0], [.25, .1, .15])
+        samples = []
+        for _ in range(20):
+            q_lerobot = dict(zip(fk.names, rng.uniform(-50, 50, 5)))
+            G_true = fk({n: q_lerobot[n] + true.get(n, 0) for n in fk.names})
+            samples.append({'joints_deg': q_lerobot, 'T_base_gripper': fk(q_lerobot).tolist(),
+                            'T_camera_board': (np.linalg.inv(X) @ np.linalg.inv(G_true) @ B).tolist()})
+        self.assertGreater(solve(samples)['board_position_rms_mm'], 5)
+        result = fit_joint_offsets(samples, fk)
+        for n, v in true.items():
+            self.assertAlmostEqual(result['joint_offsets_deg'][n], v, places=3)
+        self.assertEqual(fk.offsets, {})
+        self.assertLess(result['board_position_rms_mm'], .01)
+        np.testing.assert_allclose(result['T_gripper_camera'], X, atol=1e-5)
 
 
 if __name__ == '__main__':

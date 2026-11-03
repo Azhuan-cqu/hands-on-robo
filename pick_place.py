@@ -212,8 +212,10 @@ class Planner:
         self.fk, self.c = fk, c
         self.tool = matrix(c['T_gripper_tcp'])
         self.plate = None
-        self.lo = np.array([np.rad2deg(float(j.find('limit').get('lower'))) + 2 for j in fk.chain if j.get('type') != 'fixed'])
-        self.hi = np.array([np.rad2deg(float(j.find('limit').get('upper'))) - 2 for j in fk.chain if j.get('type') != 'fixed'])
+        # URDF limits expressed in LeRobot degrees (q_urdf = q_lerobot + offset).
+        offset = np.array([fk.offsets.get(n, 0) for n in fk.names])
+        self.lo = np.array([np.rad2deg(float(j.find('limit').get('lower'))) + 2 for j in fk.chain if j.get('type') != 'fixed']) - offset
+        self.hi = np.array([np.rad2deg(float(j.find('limit').get('upper'))) - 2 for j in fk.chain if j.get('type') != 'fixed']) - offset
 
     def tcp(self, q):
         return self.fk(dict(zip(self.fk.names, q))) @ self.tool
@@ -238,18 +240,7 @@ class Planner:
         if np.any(q < self.lo) or np.any(q > self.hi) or not np.isfinite(q).all():
             raise ValueError('Invalid joint angles / joint limit exceeded')
         # Conservative joint-to-joint capsules; no mesh/self-collision model.
-        T = np.eye(4)
-        points = []
-        for j in self.fk.chain:
-            o = j.find('origin')
-            xyz = np.fromstring(o.get('xyz', '0 0 0'), sep=' ')
-            rpy = np.fromstring(o.get('rpy', '0 0 0'), sep=' ')
-            R = [cv2.Rodrigues(np.eye(3)[i]*rpy[i])[0] for i in range(3)]
-            T = T @ transform(R[2] @ R[1] @ R[0], xyz)
-            if j.get('type') != 'fixed':
-                axis = np.fromstring(j.find('axis').get('xyz'), sep=' ')
-                T = T @ transform(cv2.Rodrigues(axis / np.linalg.norm(axis) * np.deg2rad(q[self.fk.names.index(j.get('name'))]))[0], [0, 0, 0])
-            points.append(T[:3, 3].copy())
+        points = [T[:3, 3] for T in self.fk.frames(dict(zip(self.fk.names, q)))]
         # Exempt fixed base/shoulder mounting region; check elbow onwards.
         for a, b in zip(points[2:-1], points[3:]):
             if min(a[2], b[2]) - self.c['link_radius_m'] < self.c['table_z_m']:
@@ -514,10 +505,12 @@ def main():
             cap.release()
             cv2.destroyAllWindows()
         return
-    fk = URDFFK(ROOT/c['urdf'])
+    handeye_path = ROOT/c['handeye_json']
+    offsets = json.loads(handeye_path.read_text()).get('joint_offsets_deg') if handeye_path.exists() else None
+    fk = URDFFK(ROOT/c['urdf'], offsets=offsets)
     if not a.teach_tcp:
         if a.execute:
-            calibration_gate(json.loads((ROOT/c['handeye_json']).read_text()))
+            calibration_gate(json.loads(handeye_path.read_text()))
         check_config(c, planning=not a.locate_only)
         scene = Scene(c, fk)
     robot, cap = None, None
