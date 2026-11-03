@@ -20,7 +20,9 @@ def transform(R, t):
 
 
 class URDFFK:
-    def __init__(self, path, base='base_link', tip='gripper_link'):
+    def __init__(self, path, base='base_link', tip='gripper_link', offsets=None):
+        """offsets: LeRobot-degrees -> URDF-degrees per joint (q_urdf = q_lerobot + offset)."""
+        self.offsets = offsets or {}
         root = ET.parse(path).getroot()
         by_child = {j.find('child').get('link'): j for j in root.findall('joint')}
         chain = []
@@ -34,21 +36,26 @@ class URDFFK:
         self.names = [j.get('name') for j in self.chain if j.get('type') != 'fixed']
 
     def __call__(self, degrees):
+        return self.frames(degrees)[-1]
+
+    def frames(self, degrees):
+        """4x4 transform of every joint frame along the chain (last one is the tip)."""
         T = np.eye(4)
+        out = []
         for j in self.chain:
             origin = j.find('origin')
             xyz = np.fromstring(origin.get('xyz', '0 0 0'), sep=' ') if origin is not None else np.zeros(3)
             rpy = np.fromstring(origin.get('rpy', '0 0 0'), sep=' ') if origin is not None else np.zeros(3)
             Rx, Ry, Rz = [cv2.Rodrigues(np.eye(3)[i] * rpy[i])[0] for i in range(3)]
             T = T @ transform(Rz @ Ry @ Rx, xyz)
-            if j.get('type') == 'fixed':
-                continue
-            if j.get('type') not in ('revolute', 'continuous'):
-                raise ValueError('Only fixed/revolute/continuous joints supported')
-            axis = np.fromstring(j.find('axis').get('xyz'), sep=' ')
-            angle = np.deg2rad(degrees[j.get('name')])
-            T = T @ transform(cv2.Rodrigues(axis / np.linalg.norm(axis) * angle)[0], np.zeros(3))
-        return T
+            if j.get('type') != 'fixed':
+                if j.get('type') not in ('revolute', 'continuous'):
+                    raise ValueError('Only fixed/revolute/continuous joints supported')
+                axis = np.fromstring(j.find('axis').get('xyz'), sep=' ')
+                angle = np.deg2rad(degrees[j.get('name')] + self.offsets.get(j.get('name'), 0))
+                T = T @ transform(cv2.Rodrigues(axis / np.linalg.norm(axis) * angle)[0], np.zeros(3))
+            out.append(T)
+        return out
 
 
 def solve(samples):
@@ -80,6 +87,49 @@ def solve(samples):
             'board_position_error_mm': terr.tolist(), 'board_rotation_error_deg': rerr,
             'board_position_rms_mm': float(np.sqrt(np.mean(terr ** 2))),
             'board_rotation_rms_deg': float(np.sqrt(np.mean(np.square(rerr))))}
+
+
+def fit_joint_offsets(samples, fk):
+    """Refit hand-eye X, the fixed board pose B and per-joint zero offsets so that B = FK(q+off) @ X @ C.
+    LeRobot's 0 deg is the midpoint of the manually recorded range, not the URDF zero, so FK(q) is biased.
+    First and last joint offsets are unobservable (absorbed into B / X) and stay 0.
+    """
+    from scipy.optimize import least_squares
+    names = fk.names[1:-1]
+    C = [np.asarray(s['T_camera_board'], dtype=float) for s in samples]
+    Q = [s['joints_deg'] for s in samples]
+    X0 = np.array(solve(samples)['T_gripper_camera'])
+    B0 = np.array(samples[0]['T_base_gripper']) @ X0 @ C[0]
+
+    def unpack(x):
+        return (transform(cv2.Rodrigues(x[:3])[0], x[3:6]), transform(cv2.Rodrigues(x[6:9])[0], x[9:12]),
+                {**fk.offsets, **dict(zip(names, x[12:]))})
+
+    def residual(x):
+        X, B, offsets = unpack(x)
+        fk.offsets = offsets
+        out = []
+        for q, c in zip(Q, C):
+            E = np.linalg.inv(B) @ fk(q) @ X @ c
+            out.append(np.r_[E[:3, 3] * 100, cv2.Rodrigues(E[:3, :3])[0].ravel()])
+        return np.concatenate(out)
+
+    x0 = np.r_[cv2.Rodrigues(X0[:3, :3])[0].ravel(), X0[:3, 3], cv2.Rodrigues(B0[:3, :3])[0].ravel(), B0[:3, 3], np.zeros(len(names))]
+    lo, hi = np.full(len(x0), -np.inf), np.full(len(x0), np.inf)
+    lo[12:], hi[12:] = -45, 45  # ponytail: larger offsets would mean a sign flip or wrong URDF, not a zero error
+    saved = fk.offsets
+    try:
+        fit = least_squares(residual, x0, bounds=(lo, hi), xtol=1e-10, ftol=1e-10)
+    finally:
+        fk.offsets = saved
+    _, _, offsets = unpack(fit.x)
+    fk.offsets = offsets
+    corrected = [dict(s, T_base_gripper=fk(q).tolist()) for s, q in zip(samples, Q)]
+    fk.offsets = saved
+    result = solve(corrected)
+    result['joint_offsets_deg'] = {n: float(offsets.get(n, 0)) for n in fk.names}
+    result['joint_offsets_note'] = 'q_urdf = q_lerobot + offset; first/last joint fixed at 0 (unobservable)'
+    return result
 
 
 def robot_reader(a):
@@ -227,7 +277,9 @@ def main():
             if robot is not None:
                 robot.bus.disconnect(disable_torque=False)
             cv2.destroyAllWindows()
-    result = solve(data['samples'])
+    raw = solve(data['samples'])
+    result = fit_joint_offsets(data['samples'], URDFFK(a.urdf))
+    result['before_offset_fit'] = {k: raw[k] for k in ('board_position_rms_mm', 'board_rotation_rms_deg')}
     result.update(base_frame='base_link', gripper_frame='gripper_link')
     save_json(a.output / 'handeye.json', result)
     fs = cv2.FileStorage(str(a.output / 'handeye.yml'), cv2.FILE_STORAGE_WRITE)

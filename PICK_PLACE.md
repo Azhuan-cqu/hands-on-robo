@@ -2,7 +2,9 @@
 
 入口 `pick_place.py`，配置 `pick_place_config.json`。对应课件：ArUco + solvePnP 定位 → FK/手眼变换 → TCP 偏移 + 数值 IK + 分段轨迹 → LeRobot 执行和人工结果检查。已经填入 robot ID `my_awesome_follower_arm`、相机 `0`、串口 `/dev/tty.usbmodem5B421342761`。
 
-**当前标定不能直接用于执行**：现有 handeye.json 固定板位置 RMS=31.68 mm、旋转 RMS=5.80°；camera.yml 的像素 RMS=0.243 px。前者是厘米级位姿不一致。先检查关节零位、URDF 对应关系、板/底座是否移动、腕部相机是否松动，再重新采样。脚本执行模式要求一致性 ≤5 mm、≤2°；这是此任务的筛查阈值，不是绝对抓取精度保证，还需独立姿态验证。定位和规划模式可用于排查。当前未实际连接机械臂或执行抓取。
+**当前标定不能直接用于执行**：现有 handeye.json 固定板位置 RMS=31.68 mm、旋转 RMS=5.80°；camera.yml 的像素 RMS=0.243 px。前者是厘米级位姿不一致。先检查关节零位、URDF 对应关系、板/底座是否移动、腕部相机是否松动，再重新采样。
+
+主要原因：LeRobot `use_degrees=True` 的 0° 是电机标定时手动摆动范围的中点，不是 URDF 零位。`handeye_calibration.py` 现在会在求解时同时拟合 shoulder_lift / elbow_flex / wrist_flex 的零点偏移（首尾关节偏移不可观测，固定为 0），写入 handeye.json 的 `joint_offsets_deg`，`pick_place.py` 读取后自动加到 FK 输入上。对已有样本离线重算：`uv run python handeye_calibration.py --solve-only handeye_output/samples.json`，对比输出里的 `before_offset_fit` 和新的 RMS。脚本执行模式要求一致性 ≤5 mm、≤2°；这是此任务的筛查阈值，不是绝对抓取精度保证，还需独立姿态验证。定位和规划模式可用于排查。当前未实际连接机械臂或执行抓取。
 
 ## 实物布置和参数
 
