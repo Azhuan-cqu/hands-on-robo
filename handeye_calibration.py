@@ -171,6 +171,7 @@ def main():
     p.add_argument('--disable-torque', action='store_true', help='Release motors for supported manual movement')
     p.add_argument('--max-motion-deg', type=float, default=.3)
     p.add_argument('--max-pnp-rms', type=float, default=1.0)
+    p.add_argument('--auto', type=int, metavar='N', help='No keyboard: capture whenever the arm has been still for 2 s; solve after N samples')
     a = p.parse_args()
     a.output.mkdir(parents=True, exist_ok=True)
     if a.solve_only:
@@ -208,6 +209,9 @@ def main():
                 values = robot.bus.sync_read('Present_Position')
                 return {n: float(values[n]) for n in fk.names}
             print('Keep board/base fixed. SPACE: capture stationary pose; C: solve; Q: quit. Support arm if torque disabled.')
+            if a.auto:
+                print(f'AUTO mode: hold each pose still for 2 s to capture; solves after {a.auto} samples.')
+            hold, last_attempt = [], 0.0
             while True:
                 ok, frame = cap.read()
                 if not ok:
@@ -223,9 +227,17 @@ def main():
                 key = cv2.waitKey(1) & 255
                 if key in (27, ord('q')):
                     return
-                if key == ord('c'):
+                if key == ord('c') or (a.auto and len(data['samples']) >= a.auto):
                     break
-                if key != 32:
+                if a.auto:
+                    now = time.time()
+                    hold.append((now, [read()[n] for n in fk.names]))
+                    hold = [h for h in hold if now - h[0] < 2]
+                    still = len(hold) > 5 and now - hold[0][0] > 1.8 and np.ptp([h[1] for h in hold], axis=0).max() < a.max_motion_deg
+                    if not still or now - last_attempt < 3:
+                        continue
+                    last_attempt = now
+                elif key != 32:
                     continue
                 before = read()
                 start = time.time()
