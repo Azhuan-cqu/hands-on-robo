@@ -1,0 +1,564 @@
+#!/usr/bin/env python3
+"""SO101 marker-based pick/place. Default: observe and plan, no motor commands."""
+import argparse
+import json
+import time
+from pathlib import Path
+import cv2
+import numpy as np
+from scipy.optimize import least_squares
+from camera_intrinsic import open_camera, save_json, reprojection
+from handeye_calibration import URDFFK, robot_reader, transform
+
+ROOT = Path(__file__).resolve().parent
+
+
+def select_marker(ids, selected=None):
+    values = np.asarray(ids).reshape(-1).tolist() if ids is not None else []
+    if selected is None:
+        if len(values) != 1:
+            raise ValueError(f'Automatic target selection needs exactly one visible marker; detected {values}. Hide other markers or set cube.id.')
+        return int(values[0])
+    if values.count(selected) != 1:
+        raise ValueError(f'Locked target ID {selected} is not uniquely visible')
+    return selected
+
+
+def contact_candidate(readings, command, closed):
+    """Stable position with closing error: possible contact, not proof of grasp."""
+    if len(readings) < 8:
+        return False
+    tail = np.asarray(readings[-8:], dtype=float)
+    return bool(np.isfinite(tail).all() and np.ptp(tail) <= .5 and
+                np.mean(tail) > closed + 5 and np.mean(tail) - command >= 3)
+
+
+def matrix(value):
+    T = np.asarray(value, dtype=float)
+    if T.shape != (4, 4) or not np.isfinite(T).all() or not np.allclose(T[3], [0, 0, 0, 1]) or not np.allclose(T[:3, :3].T @ T[:3, :3], np.eye(3), atol=1e-5) or np.linalg.det(T[:3, :3]) < .99:
+        raise ValueError('Expected a rigid 4x4 transform')
+    return T
+
+
+def roles(c):
+    return ('cube',) if c.get('pick_only') else ('cube', 'plate')
+
+
+def check_config(c, planning=True):
+    for role in roles(c):
+        for key in ('id', 'marker_mm'):
+            if c[role][key] is None and not (c.get('pick_only') and key == 'id'):
+                raise ValueError(f'Fill {role}.{key} with measured data in config')
+        if c[role]['marker_mm'] <= 0:
+            raise ValueError('Marker length must be positive')
+    if not c.get('pick_only') and c['cube']['id'] == c['plate']['id']:
+        raise ValueError('Cube and plate need different marker IDs')
+    if planning:
+        for key in ('T_gripper_tcp', 'table_z_m', 'workspace_min_m', 'workspace_max_m', 'gripper_open', 'gripper_closed', 'tool_radius_mm', 'tcp_lowest_extent_mm'):
+            if c[key] is None:
+                raise ValueError(f'Fill {key} in config first')
+        matrix(c['T_gripper_tcp'])
+        dimensions = [('cube', 'side_mm'), ('cube', 'grasp_depth_mm')]
+        if not c.get('pick_only'):
+            dimensions += [('plate', 'rim_height_mm'), ('plate', 'inner_half_size_mm'), ('plate', 'outer_half_size_mm')]
+        for role, key in dimensions:
+            if c[role][key] is None and not (c.get('pick_only') and key == 'id'):
+                raise ValueError(f'Fill {role}.{key} in config first')
+        if not 0 < c['cube']['grasp_depth_mm'] < c['cube']['side_mm']:
+            raise ValueError('Grasp depth must be between cube top and bottom')
+        if not 0 <= c['gripper_closed'] < c['gripper_open'] <= 100:
+            raise ValueError('Gripper values use LeRobot 0..100; closed < open')
+        if not c.get('pick_only') and min(c['plate']['inner_half_size_mm']) <= c['cube']['side_mm'] / 2 + 10:
+            raise ValueError('Plate interior too small for cube plus 10 mm margin')
+        if not c.get('pick_only') and not np.all(np.asarray(c['plate']['outer_half_size_mm']) > c['plate']['inner_half_size_mm']):
+            raise ValueError('Plate outer dimensions must exceed inner dimensions')
+        if c['speed_deg_s'] <= 0 or c['speed_deg_s'] > 15 or c['clearance_m'] < .03 or c['link_radius_m'] <= 0:
+            raise ValueError('Invalid speed/clearance/radius')
+        if c['tool_radius_mm'] <= 0 or c['tcp_lowest_extent_mm'] < 0 or (not c.get('pick_only') and c['plate']['rim_height_mm'] < 0):
+            raise ValueError('Invalid measured tool/plate envelope')
+        if not np.all(np.asarray(c['workspace_min_m']) < c['workspace_max_m']):
+            raise ValueError('Invalid workspace bounds')
+
+
+def calibration_gate(h):
+    # Task policy, not a universal guarantee of accuracy.
+    errors = np.array([h.get('board_position_rms_mm', float('inf')), h.get('board_rotation_rms_deg', float('inf'))], dtype=float)
+    if not np.isfinite(errors).all() or np.any(errors < 0) or np.any(errors > [5, 2]):
+        raise ValueError('Execution blocked: hand-eye consistency exceeds 5 mm / 2 deg. Recalibrate and validate on independent poses.')
+
+
+def marker_pose(corners, side_m, K, D, max_rms=1.5):
+    s = side_m / 2
+    obj = np.array([[-s, s, 0], [s, s, 0], [s, -s, 0], [-s, -s, 0]], dtype=np.float64)
+    img = np.asarray(corners, dtype=np.float64).reshape(4, 1, 2)
+    ok, rs, ts, _ = cv2.solvePnPGeneric(obj, img, K, D, flags=cv2.SOLVEPNP_IPPE_SQUARE)
+    candidates = []
+    if ok:
+        for r, t in zip(rs, ts):
+            R = cv2.Rodrigues(r)[0]
+            if np.min((obj @ R.T + t.reshape(3))[:, 2]) > 0:
+                candidates.append((reprojection(obj, img, r, t, K, D), transform(R, t)))
+    candidates.sort(key=lambda x: x[0])
+    if not candidates or candidates[0][0] > max_rms:
+        raise ValueError('Marker PnP reprojection too large / no valid solution')
+    if len(candidates) > 1:
+        e0, a = candidates[0]
+        e1, b = candidates[1]
+        angle = np.rad2deg(np.linalg.norm(cv2.Rodrigues(a[:3, :3].T @ b[:3, :3])[0]))
+        if e1 - e0 < .15 and angle > 10:
+            raise ValueError('Ambiguous planar marker pose: change camera viewpoint')
+    return candidates[0]
+
+
+class Scene:
+    def __init__(self, c, fk):
+        self.c, self.fk = c, fk
+        self.selected_id = c['cube']['id']
+        fs = cv2.FileStorage(str(ROOT / c['camera_yml']), cv2.FILE_STORAGE_READ)
+        if not fs.isOpened():
+            raise ValueError('Cannot read camera calibration')
+        self.K, self.D = fs.getNode('K').mat(), fs.getNode('D').mat()
+        self.size = int(fs.getNode('image_width').real()), int(fs.getNode('image_height').real())
+        fs.release()
+        self.h = json.loads((ROOT / c['handeye_json']).read_text())
+        if self.h.get('translation_unit') != 'meter' or self.h.get('gripper_frame') != 'gripper_link':
+            raise ValueError('Hand-eye units/frame mismatch')
+        self.X = matrix(self.h['T_gripper_camera'])
+        params = cv2.aruco.DetectorParameters()
+        params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+        self.detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, c['dictionary'])), params)
+
+    def detect(self, frame, q):
+        if (frame.shape[1], frame.shape[0]) != self.size:
+            raise ValueError('Camera resolution differs from calibration')
+        corners, ids, _ = self.detector.detectMarkers(frame)
+        view = frame.copy()
+        found = {}
+        if ids is not None:
+            cv2.aruco.drawDetectedMarkers(view, corners, ids)
+            for role in roles(self.c):
+                target_id = self.c[role]['id']
+                if self.c.get('pick_only'):
+                    self.selected_id = select_marker(ids, self.selected_id)
+                    target_id = self.selected_id
+                indices = np.flatnonzero(ids.ravel() == target_id)
+                if len(indices) != 1:
+                    continue
+                error, C = marker_pose(corners[indices[0]], self.c[role]['marker_mm'] / 1000, self.K, self.D)
+                B = self.fk(q) @ self.X @ C
+                if B[2, 2] < np.cos(np.deg2rad(20)):
+                    raise ValueError(f'{role}: expected upward marker on horizontal top surface')
+                found[role] = {'T_base_marker': B.tolist(), 'T_camera_marker': C.tolist(), 'id': int(target_id), 'rms_px': error}
+                r = cv2.Rodrigues(C[:3, :3])[0]
+                cv2.drawFrameAxes(view, self.K, self.D, r, C[:3, 3], .025)
+        return found, view
+
+
+def read_q(robot, fk):
+    values = robot.bus.sync_read('Present_Position')
+    return {n: float(values[n]) for n in fk.names}, float(values['gripper'])
+
+
+def observe(cap, robot, scene, output):
+    output.mkdir(parents=True, exist_ok=True)
+    print('Hold still with target marker(s) visible. SPACE capture, Q/ESC cancel.')
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            raise RuntimeError('Camera read failed')
+        cv2.imshow('Pick/place', frame)
+        key = cv2.waitKey(1) & 255
+        if key in (27, ord('q')):
+            raise KeyboardInterrupt
+        if key != 32:
+            continue
+        readings, detections = [], []
+        try:
+            for i in range(10):
+                q0, _ = read_q(robot, scene.fk)
+                ok, frame = cap.read()
+                if not ok:
+                    raise RuntimeError('Camera read failed')
+                q1, grip = read_q(robot, scene.fk)
+                readings.extend([list(q0.values()), list(q1.values())])
+                if i < 5:
+                    continue  # discard buffered frames
+                q = {n: (q0[n] + q1[n]) / 2 for n in q0}
+                found, view = scene.detect(frame, q)
+                if len(found) != len(roles(scene.c)):
+                    raise ValueError('Required target marker(s) must be visible')
+                cv2.imshow('Pick/place', view)
+                cv2.waitKey(1)
+                detections.append(found)
+            if np.max(np.ptp(readings, axis=0)) > .3:
+                raise ValueError('Robot moved during observation')
+            for role in roles(scene.c):
+                poses = np.array([d[role]['T_base_marker'] for d in detections])
+                if np.max(np.linalg.norm(poses[:, :3, 3] - poses[-1, :3, 3], axis=1)) > .003:
+                    raise ValueError('Target position unstable by >3 mm')
+                if any(np.linalg.norm(cv2.Rodrigues(poses[-1, :3, :3].T @ R)[0]) > np.deg2rad(3) for R in poses[:, :3, :3]):
+                    raise ValueError('Target orientation unstable by >3 deg')
+            record = {'time': time.time(), 'joints_deg': q, 'gripper': grip, 'targets': detections[-1]}
+            save_json(output / 'observation.json', record)
+            if not cv2.imwrite(str(output / 'observation.png'), frame):
+                raise IOError('Image save failed')
+            return record
+        except ValueError as e:
+            print('Capture rejected:', e)
+
+
+class Planner:
+    def __init__(self, fk, c):
+        self.fk, self.c = fk, c
+        self.tool = matrix(c['T_gripper_tcp'])
+        self.plate = None
+        self.lo = np.array([np.rad2deg(float(j.find('limit').get('lower'))) + 2 for j in fk.chain if j.get('type') != 'fixed'])
+        self.hi = np.array([np.rad2deg(float(j.find('limit').get('upper'))) - 2 for j in fk.chain if j.get('type') != 'fixed'])
+
+    def tcp(self, q):
+        return self.fk(dict(zip(self.fk.names, q))) @ self.tool
+
+    def ik(self, target, seed):
+        def residual(q):
+            actual = self.tcp(q)
+            return np.r_[(actual[:3, 3] - target[:3, 3]) * 100,
+                         cv2.Rodrigues(target[:3, :3].T @ actual[:3, :3])[0].ravel()]
+        result = least_squares(residual, np.clip(seed, self.lo + 1e-6, self.hi - 1e-6), bounds=(self.lo, self.hi), max_nfev=180,
+                               ftol=1e-9, xtol=1e-9, gtol=1e-9)
+        actual = self.tcp(result.x)
+        pe = np.linalg.norm(actual[:3, 3] - target[:3, 3])
+        re = np.rad2deg(np.linalg.norm(cv2.Rodrigues(target[:3, :3].T @ actual[:3, :3])[0]))
+        if pe > .002 or re > 5:
+            raise ValueError(f'Unreachable TCP pose: {pe*1000:.1f} mm / {re:.1f} deg; reposition targets')
+        if np.max(np.abs(result.x - seed)) > 12:
+            raise ValueError('IK discontinuity: joint step >12 deg')
+        return result.x
+
+    def clearance(self, q):
+        if np.any(q < self.lo) or np.any(q > self.hi) or not np.isfinite(q).all():
+            raise ValueError('Invalid joint angles / joint limit exceeded')
+        # Conservative joint-to-joint capsules; no mesh/self-collision model.
+        T = np.eye(4)
+        points = []
+        for j in self.fk.chain:
+            o = j.find('origin')
+            xyz = np.fromstring(o.get('xyz', '0 0 0'), sep=' ')
+            rpy = np.fromstring(o.get('rpy', '0 0 0'), sep=' ')
+            R = [cv2.Rodrigues(np.eye(3)[i]*rpy[i])[0] for i in range(3)]
+            T = T @ transform(R[2] @ R[1] @ R[0], xyz)
+            if j.get('type') != 'fixed':
+                axis = np.fromstring(j.find('axis').get('xyz'), sep=' ')
+                T = T @ transform(cv2.Rodrigues(axis / np.linalg.norm(axis) * np.deg2rad(q[self.fk.names.index(j.get('name'))]))[0], [0, 0, 0])
+            points.append(T[:3, 3].copy())
+        # Exempt fixed base/shoulder mounting region; check elbow onwards.
+        for a, b in zip(points[2:-1], points[3:]):
+            if min(a[2], b[2]) - self.c['link_radius_m'] < self.c['table_z_m']:
+                raise ValueError('Conservative arm/table clearance failed')
+        tcp = self.tcp(q)[:3, 3]
+        lowest = tcp[2] - max(self.c['tcp_lowest_extent_mm'], self.c['cube']['side_mm']-self.c['cube']['grasp_depth_mm'])/1000
+        if tcp[2] - self.c['tcp_lowest_extent_mm']/1000 < self.c['table_z_m'] + .001 or lowest < self.c['table_z_m'] - .001:
+            raise ValueError('Tool/cube envelope intersects table')
+        if self.plate is not None:
+            local = (np.linalg.inv(self.plate) @ np.r_[tcp, 1])[:3]
+            radius = max(self.c['tool_radius_mm'], self.c['cube']['side_mm']/np.sqrt(2))/1000
+            outer = np.array(self.c['plate']['outer_half_size_mm'])/1000
+            inner = np.array(self.c['plate']['inner_half_size_mm'])/1000
+            near = np.all(np.abs(local[:2]) < outer + radius)
+            below_rim = lowest < self.plate[2, 3] + self.c['plate']['rim_height_mm']/1000 + .003
+            if near and below_rim and np.any(np.abs(local[:2]) + radius + .003 > inner):
+                raise ValueError('Tool/cube envelope intersects plate rim')
+            if near and lowest < self.plate[2, 3] + .001:
+                raise ValueError('Tool/cube envelope intersects plate floor')
+        if np.any(tcp < self.c['workspace_min_m']) or np.any(tcp > self.c['workspace_max_m']):
+            raise ValueError('TCP outside measured workspace')
+
+    def plan(self, obs):
+        c = self.c
+        cube = matrix(obs['targets']['cube']['T_base_marker'])
+        pick_only = c.get('pick_only', False)
+        pick = cube[:3, 3] - np.array([0, 0, c['cube']['grasp_depth_mm']/1000])
+        self.plate = None
+        if pick_only:
+            safe_z = cube[2, 3] + c['clearance_m']
+        else:
+            plate = matrix(obs['targets']['plate']['T_base_marker'])
+            self.plate = plate
+            drop = (plate @ np.r_[np.array(c['plate']['drop_offset_mm'])/1000, 1])[:3]
+            drop[2] += (c['cube']['side_mm'] - c['cube']['grasp_depth_mm'] + c['release_gap_mm'])/1000
+            safe_z = max(cube[2, 3], plate[2, 3] + c['plate']['rim_height_mm']/1000) + c['clearance_m'] + c['cube']['side_mm']/1000
+        q0 = np.array([obs['joints_deg'][n] for n in self.fk.names])
+        if np.any(q0 < self.lo) or np.any(q0 > self.hi):
+            raise ValueError('Initial pose outside joint limits')
+        self.clearance(q0)
+        start = self.tcp(q0)
+        if start[2, 2] > -np.cos(np.deg2rad(5)):
+            raise ValueError('Observation TCP must already point vertically down within 5 deg')
+        if start[2, 3] < safe_z:
+            raise ValueError('Teach observation pose higher than transfer clearance, then observe again')
+        candidates = []
+        failures = []
+        for yaw_offset in (0, np.pi/2, np.pi, 3*np.pi/2):
+            yaw = np.arctan2(cube[1, 0], cube[0, 0]) + yaw_offset
+            x = np.array([np.cos(yaw), np.sin(yaw), 0])
+            z = np.array([0., 0., -1.])
+            R = np.column_stack([x, np.cross(z, x), z])
+            def pose(p):
+                return transform(R, p)
+            above_pick = pick.copy()
+            above_pick[2] = safe_z
+            align = start.copy()
+            align[:3, :3] = R
+            targets = [('align', align, 'open'), ('approach', pose(above_pick), 'open'),
+                       ('descend', pose(pick), 'open'), ('grasp', pose(pick), 'closed'),
+                       ('lift', pose(above_pick), 'closed')]
+            if not pick_only:
+                above_drop = drop.copy()
+                above_drop[2] = safe_z
+                targets += [('transfer', pose(above_drop), 'closed'), ('place', pose(drop), 'closed'),
+                            ('release', pose(drop), 'open'), ('retract', pose(above_drop), 'open')]
+            q, prev, rows = q0.copy(), start.copy(), []
+            try:
+                for name, target, grip in targets:
+                    angle = cv2.Rodrigues(prev[:3, :3].T @ target[:3, :3])[0].ravel()
+                    count = max(1, int(np.ceil(np.linalg.norm(target[:3, 3]-prev[:3, 3])/.003)), int(np.ceil(np.linalg.norm(angle)/.03)))
+                    segment = []
+                    for u in np.linspace(0, 1, count+1)[1:]:
+                        goal = transform(prev[:3, :3] @ cv2.Rodrigues(angle*u)[0], (1-u)*prev[:3, 3]+u*target[:3, 3])
+                        q = self.ik(goal, q)
+                        self.clearance(q)
+                        segment.append(q.tolist())
+                    rows.append({'stage': name, 'joints_deg': segment, 'gripper': c['gripper_'+grip], 'T_base_tcp': target.tolist()})
+                    prev = target
+                candidates.append((sum(np.linalg.norm(np.diff(np.vstack([q0]+[q for s in rows for q in s['joints_deg']]), axis=0), axis=1)), rows))
+            except ValueError as e:
+                failures.append(str(e))
+        if not candidates:
+            raise ValueError('No reachable square-aligned grasp: ' + '; '.join(failures))
+        return min(candidates, key=lambda v: v[0])[1]
+
+
+def pivot_tcp(poses):
+    if len(poses) < 6:
+        raise ValueError('Need >=6 distinct orientations with TCP at same fixed physical point')
+    A = np.vstack([np.c_[T[:3, :3], -np.eye(3)] for T in poses])
+    b = np.concatenate([-T[:3, 3] for T in poses])
+    x, _, rank, s = np.linalg.lstsq(A, b, rcond=None)
+    rms = float(np.sqrt(np.mean(np.sum((A @ x-b).reshape(-1, 3)**2, axis=1))))
+    if rank < 6 or s[-1]/s[0] < .02 or rms > .003:
+        raise ValueError(f'Poor pivot data: rank={rank}, RMS={rms*1000:.2f} mm')
+    return x[:3], rms
+
+
+def teach(robot, fk, out):
+    poses = []
+    print('No automatic torque release. Support arm and use existing manual setup. Keep the intended grasp center at ONE fixed point; vary wrist orientation.')
+    while True:
+        command = input('ENTER pivot sample; s solve translation; o teach orientation; q quit: ').strip().lower()
+        if command == 'o':
+            input('Set grasp insertion direction vertically DOWN (-base Z), jaw closing axis along +base X; ENTER when stationary: ')
+            q, _ = read_q(robot, fk)
+            R = fk(q)[:3, :3].T @ np.diag([1., -1., -1.])
+            save_json(out / 'tcp_rotation.json', {'R_gripper_tcp': R.tolist(), 'joints_deg': q})
+            print('Saved orientation; accuracy depends on physical alignment to BASE axes.')
+            continue
+        if command == 'q':
+            return
+        if command == 's':
+            t, rms = pivot_tcp(poses)
+            save_json(out / 'tcp_translation.json', {'translation_gripper_m': t.tolist(), 'pivot_rms_mm': rms*1000,
+                     'note': 'Translation only. Define TCP rotation separately: +Z insertion direction; +X jaw closing direction.'})
+            print('TCP translation in gripper_link:', t, 'RMS mm:', rms*1000)
+            return
+        q, _ = read_q(robot, fk)
+        poses.append(fk(q))
+        save_json(out / 'tcp_pivot_samples.json', [T.tolist() for T in poses])
+        print('Recorded', len(poses))
+
+
+def execute(robot, planner, plan, obs, cap, out):
+    c = planner.c
+    log = {'status': 'running', 'events': []}
+    last = np.array([obs['joints_deg'][n] for n in planner.fk.names])
+    def event(stage, **kw):
+        log['events'].append({'time': time.time(), 'stage': stage, **kw})
+        save_json(out / 'execution.json', log)
+    def check_stop():
+        ok, frame = cap.read()
+        if not ok:
+            raise RuntimeError('Camera lost during execution')
+        cv2.imshow('Pick/place', frame)
+        if cv2.waitKey(1) & 255 in (27, ord('q')):
+            raise KeyboardInterrupt
+    def move(target, grip, allow_gripper_contact=False):
+        nonlocal last
+        q, oldgrip = read_q(robot, planner.fk)
+        old = np.array([q[n] for n in planner.fk.names])
+        duration = max(.15, np.max(np.abs(target-old))/c['speed_deg_s']*1.6, abs(grip-oldgrip)/20*1.6)
+        steps = max(2, int(np.ceil(duration*20)))
+        for u in np.linspace(0, 1, steps+1)[1:]:
+            s = 3*u*u-2*u*u*u
+            cmd = old+(target-old)*s
+            planner.clearance(cmd)
+            robot.bus.sync_write('Goal_Position', dict(zip(planner.fk.names, cmd)) | {'gripper': oldgrip+(grip-oldgrip)*s})
+            check_stop()
+            measured, _ = read_q(robot, planner.fk)
+            if max(abs(measured[n]-cmd[i]) for i, n in enumerate(planner.fk.names)) > 8:
+                raise RuntimeError('Joint tracking error >8 deg')
+            time.sleep(duration/steps)
+        deadline = time.monotonic()+3
+        while True:
+            measured, measured_grip = read_q(robot, planner.fk)
+            if max(abs(measured[n]-target[i]) for i,n in enumerate(planner.fk.names)) < 2 and (allow_gripper_contact or abs(measured_grip-grip) < 5):
+                break
+            if time.monotonic() > deadline:
+                raise RuntimeError('Motion failed to settle')
+            check_stop()
+            time.sleep(.05)
+        last = target.copy()
+    def close_until_contact():
+        _, opening = read_q(robot, planner.fk)
+        history = []
+        command = opening
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline:
+            command = max(c['gripper_closed'], command - .5)
+            robot.bus.write('Goal_Position', 'gripper', command)
+            check_stop()
+            q, actual = read_q(robot, planner.fk)
+            if max(abs(q[n] - last[i]) for i, n in enumerate(planner.fk.names)) > 2:
+                raise RuntimeError('Arm moved while closing gripper')
+            history.append(actual)
+            if contact_candidate(history, command, c['gripper_closed']):
+                # Keep the small current position error; do not continue squeezing to zero.
+                event('possible_contact', measured_opening=actual, held_command=command)
+                if input('Possible contact detected. Is the object visibly between both fingers? Type yes to lift: ').strip().lower() != 'yes':
+                    raise RuntimeError('Grasp not visually confirmed; no lift')
+                return command
+            if actual <= c['gripper_closed'] + 2:
+                raise RuntimeError('Gripper reached closed endpoint: possible empty grasp; no lift')
+            time.sleep(.05)
+        raise RuntimeError('No stable contact before timeout; no lift')
+
+    try:
+        current, grip = read_q(robot, planner.fk)
+        if max(abs(current[n]-obs['joints_deg'][n]) for n in current) > .5:
+            raise ValueError('Robot changed after observation; observe again')
+        # Existing calibrated LeRobot controller setup; caller must support arm during configure.
+        robot.configure()
+        robot.bus.sync_write('Goal_Position', current | {'gripper': grip})
+        robot.bus.enable_torque()
+        held_grip = None
+        for stage in plan:
+            if c.get('pick_only') and stage['stage'] == 'grasp':
+                held_grip = close_until_contact()
+                event('grasp', measured=robot.bus.sync_read('Present_Position'))
+                continue
+            grip_command = held_grip if c.get('pick_only') and stage['stage'] == 'lift' else stage['gripper']
+            for row in stage['joints_deg']:
+                move(np.array(row), grip_command, stage['stage'] in ('grasp', 'lift', 'transfer', 'place'))
+            event(stage['stage'], measured=robot.bus.sync_read('Present_Position'))
+            if stage['stage'] == 'lift':
+                answer = input('Visually check: cube is securely lifted? Type yes to continue: ').strip().lower()
+                if answer != 'yes':
+                    raise RuntimeError('Pickup not confirmed')
+        if c.get('pick_only'):
+            log['status'] = 'lift_operator_verified_holding'
+            print('Lift finished. Motors remain enabled, holding the object; no release command sent.')
+        else:
+            answer = input('Visually check: cube is inside plate and gripper clear? Type yes if successful: ').strip().lower()
+            log['status'] = 'success_operator_verified' if answer == 'yes' else 'placement_not_verified'
+    except BaseException as e:
+        log['status'] = 'aborted'
+        log['reason'] = str(e) or type(e).__name__
+        # Hold current arm position; do not release a potentially loaded arm.
+        try:
+            hold = robot.bus.sync_read('Present_Position')
+            robot.bus.sync_write('Goal_Position', hold)
+        except Exception as hold_error:
+            log['hold_error'] = str(hold_error)
+        raise
+    finally:
+        save_json(out / 'execution.json', log)
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--config', type=Path, default=ROOT/'pick_place_config.json')
+    p.add_argument('--output', type=Path, default=ROOT/'pick_place_output')
+    p.add_argument('--locate-only', action='store_true')
+    p.add_argument('--execute', action='store_true')
+    p.add_argument('--pick-only', action='store_true', help='Auto-select one marker, grasp and lift; no plate required')
+    p.add_argument('--teach-tcp', action='store_true')
+    p.add_argument('--scan-markers', action='store_true', help='Show detected IDs without connecting robot')
+    a = p.parse_args()
+    if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers]) > 1:
+        p.error('Choose only one mode')
+    c = json.loads(a.config.read_text())
+    c['pick_only'] = a.pick_only
+    a.output.mkdir(parents=True, exist_ok=True)
+    if a.scan_markers:
+        cap = open_camera(c['camera'], 1280, 720)
+        detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, c['dictionary'])))
+        try:
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    raise RuntimeError('Camera read failed')
+                corners, ids, _ = detector.detectMarkers(frame)
+                if ids is not None:
+                    cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+                cv2.imshow('Marker IDs (Q quits)', frame)
+                if cv2.waitKey(1) & 255 in (27, ord('q')):
+                    break
+        finally:
+            cap.release()
+            cv2.destroyAllWindows()
+        return
+    fk = URDFFK(ROOT/c['urdf'])
+    if not a.teach_tcp:
+        if a.execute:
+            calibration_gate(json.loads((ROOT/c['handeye_json']).read_text()))
+        check_config(c, planning=not a.locate_only)
+        scene = Scene(c, fk)
+    robot, cap = None, None
+    try:
+        robot = robot_reader(argparse.Namespace(port=c['port'], robot_id=c['robot_id'],
+                    calibration_dir=Path(c['calibration_dir']) if c['calibration_dir'] else None, disable_torque=False))
+        if a.teach_tcp:
+            teach(robot, fk, a.output)
+            return
+        cap = open_camera(c['camera'], *scene.size)
+        obs = observe(cap, robot, scene, a.output)
+        print(json.dumps(obs['targets'], indent=2))
+        if a.locate_only:
+            return
+        planner = Planner(fk, c)
+        plan = planner.plan(obs)
+        save_json(a.output/'plan.json', {'config': c, 'observation': obs, 'stages': plan,
+                  'collision_model': 'Partial arm/table capsules, tool/cube plate envelope, TCP bounds; no mesh/self-collision guarantee'})
+        for s in plan:
+            print(s['stage'], 'TCP m:', np.round(np.array(s['T_base_tcp'])[:3, 3], 4), 'samples:', len(s['joints_deg']))
+        if not a.execute:
+            print('Plan saved. No motion commands sent. Inspect plan and physical clearance before --execute.')
+            return
+        print('Support arm during controller setup. Clear path/table/plate rim and check gripper geometry. Q/ESC in camera window or Ctrl-C stops commands and attempts hold.')
+        if input('Scene unchanged and path reviewed? Type execute: ').strip() != 'execute':
+            return
+        # Reject stale target positions after human review; plan must describe this observation.
+        fresh = observe(cap, robot, scene, a.output/'recheck')
+        for role in roles(c):
+            old = matrix(obs['targets'][role]['T_base_marker'])
+            new = matrix(fresh['targets'][role]['T_base_marker'])
+            if np.linalg.norm(old[:3, 3]-new[:3, 3]) > .003 or np.linalg.norm(cv2.Rodrigues(old[:3, :3].T @ new[:3, :3])[0]) > np.deg2rad(3):
+                raise ValueError('Scene changed; rerun observation and planning')
+        execute(robot, planner, plan, obs, cap, a.output)
+    finally:
+        if cap is not None:
+            cap.release()
+        if robot is not None:
+            robot.bus.disconnect(disable_torque=False)
+        cv2.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    main()

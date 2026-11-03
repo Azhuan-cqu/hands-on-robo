@@ -1,0 +1,72 @@
+{
+  "robot_id": "my_awesome_follower_arm",
+  "port": "/dev/tty.usbmodem5B421342761",
+  "camera": "0",
+  "calibration_dir": null,
+  "camera_yml": "intrinsic_output/camera.yml",
+  "handeye_json": "handeye_output/handeye.json",
+  "urdf": "so101_new_calib.urdf",
+  "dictionary": "DICT_4X4_50",
+  "cube": {
+    "id": null,
+    "marker_mm": 180,
+    "side_mm": 250,
+    "grasp_depth_mm": null
+  },
+  "plate": {
+    "id": null,
+    "marker_mm": null,
+    "rim_height_mm": null,
+    "inner_half_size_mm": null,
+    "drop_offset_mm": [
+      0,
+      0,
+      0
+    ],
+    "outer_half_size_mm": null,
+    "reported_size_mm": [
+      1000,
+      1000
+    ],
+    "reported_size_note": "User stated 100 cm x 100 cm; inner/outer boundary not specified."
+  },
+  "T_gripper_tcp": [
+    [
+      -0.9999999999964793,
+      0.0,
+      2.65358979335273e-06,
+      -0.0079
+    ],
+    [
+      -0.0,
+      1.0,
+      0.0,
+      -0.000218121
+    ],
+    [
+      -2.65358979335273e-06,
+      -0.0,
+      -0.9999999999964793,
+      -0.0981274
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "table_z_m": null,
+  "workspace_min_m": null,
+  "workspace_max_m": null,
+  "gripper_open": 100,
+  "gripper_closed": 0,
+  "clearance_m": 0.05,
+  "link_radius_m": 0.035,
+  "release_gap_mm": 3,
+  "speed_deg_s": 8,
+  "tool_radius_mm": null,
+  "tcp_lowest_extent_mm": null,
+  "tcp_source": "so101_new_calib.urdf:gripper_frame_joint",
+  "tcp_status": "URDF nominal reference frame; physical contact center and jaw opening not validated"
+}
