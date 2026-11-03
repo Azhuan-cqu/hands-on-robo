@@ -1,3 +1,0 @@
-numpy>=1.26,<3
-opencv-contrib-python>=4.8,<5
-# Hand-eye capture additionally requires your existing LeRobot installation with Feetech support.

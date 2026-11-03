@@ -1,3 +1,11 @@
+## 安装
+
+```bash
+uv sync
+```
+
+之后用 `uv run python xxx.py` 代替 `python xxx.py`。
+
 ## 1
 
 python camera_intrinsic.py --camera 0 --width 1280 --height 720

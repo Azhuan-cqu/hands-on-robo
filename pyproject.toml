@@ -1,0 +1,13 @@
+[project]
+name = "hands-on-robo"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0,<2.3",
+    "opencv-contrib-python>=4.9,<4.14",
+    "scipy>=1.11,<2",
+    "lerobot[feetech]>=0.6",
+]
+
+[tool.uv]
+package = false
