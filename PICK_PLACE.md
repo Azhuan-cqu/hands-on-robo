@@ -31,11 +31,11 @@
 
 ## 环境及识别 ID
 
-在你已有的 LeRobot 环境运行：
+用 uv 创建环境（依赖见 `pyproject.toml`，含 `lerobot[feetech]`）：
 
 ```bash
-python -m pip install -r requirements-pick-place.txt
-python pick_place.py --scan-markers
+uv sync
+uv run pick_place.py --scan-markers
 ```
 
 扫描模式仅打开相机，在图像上显示字典内的 marker ID，不连接机械臂、不需要尺寸。Q/ESC 退出。没有识别时先核对字典、清晰度和打印图案。
