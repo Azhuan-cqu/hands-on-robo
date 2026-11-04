@@ -75,9 +75,9 @@ class PickTests(unittest.TestCase):
         obs = {'joints_deg': dict(zip(fk.names, q)), 'targets': {
             'cube': {'T_base_marker': B.tolist()}, 'plate': {'T_base_marker': P.tolist()}}}
         plan = planner.plan(obs)
-        self.assertEqual([s['stage'] for s in plan], ['align', 'approach', 'descend', 'grasp', 'lift', 'transfer', 'place', 'release', 'retract'])
-        self.assertEqual(plan[3]['gripper'], c['gripper_closed'])
-        self.assertEqual(plan[7]['gripper'], c['gripper_open'])
+        self.assertEqual([s['stage'] for s in plan], ['align', 'approach', 'hover', 'descend', 'grasp', 'lift', 'transfer', 'place', 'release', 'retract'])
+        self.assertEqual(plan[4]['gripper'], c['gripper_closed'])
+        self.assertEqual(plan[8]['gripper'], c['gripper_open'])
         # Put a rim directly under the current TCP envelope.
         planner.plate = np.eye(4)
         planner.plate[:3, 3] = planner.tcp(q)[:3, 3] + [-.03, 0, -.006]
@@ -131,7 +131,7 @@ class PickOnlyTests(PickTests):
         B[:3, 3] = planner.tcp(q)[:3, 3] + [0, 0, -.1]
         obs = {'joints_deg': dict(zip(fk.names, q)), 'targets': {'cube': {'T_base_marker': B.tolist()}}}
         plan = planner.plan(obs)
-        self.assertEqual([s['stage'] for s in plan], ['align', 'approach', 'descend', 'grasp', 'lift'])
+        self.assertEqual([s['stage'] for s in plan], ['align', 'approach', 'hover', 'descend', 'grasp', 'lift'])
         self.assertIsNone(planner.plate)
 
 if __name__ == '__main__':
