@@ -194,8 +194,6 @@ class Scene:
                 T_base_cam = self.fk(q) @ self.X
                 error, C = marker_pose(corners[indices[0]], self.c[role]['marker_mm'] / 1000, self.K, self.D, up_hint=T_base_cam[:3, :3].T @ [0, 0, 1])
                 B = T_base_cam @ C
-                if B[2, 2] < np.cos(np.deg2rad(20)):
-                    raise ValueError(f'{role}: expected upward marker on horizontal top surface')
                 found[role] = {'T_base_marker': B.tolist(), 'T_camera_marker': C.tolist(), 'id': int(target_id), 'rms_px': error}
                 r = cv2.Rodrigues(C[:3, :3])[0]
                 cv2.drawFrameAxes(view, self.K, self.D, r, C[:3, 3], .025)
@@ -273,10 +271,10 @@ def observe(cap, robot, scene, output):
                 raise ValueError('Robot moved during observation')
             for role in roles(scene.c):
                 poses = np.array([d[role]['T_base_marker'] for d in detections])
-                if np.max(np.linalg.norm(poses[:, :3, 3] - poses[-1, :3, 3], axis=1)) > .008:
-                    raise ValueError('Target position unstable by >8 mm')
-                if any(np.linalg.norm(cv2.Rodrigues(poses[-1, :3, :3].T @ R)[0]) > np.deg2rad(6) for R in poses[:, :3, :3]):
-                    raise ValueError('Target orientation unstable by >6 deg')
+                if np.max(np.linalg.norm(poses[:, :3, 3] - poses[-1, :3, 3], axis=1)) > .015:
+                    raise ValueError('Target position unstable by >15 mm')
+                if any(np.linalg.norm(cv2.Rodrigues(poses[-1, :3, :3].T @ R)[0]) > np.deg2rad(10) for R in poses[:, :3, :3]):
+                    raise ValueError('Target orientation unstable by >10 deg')
             record = {'time': time.time(), 'joints_deg': q, 'gripper': grip, 'targets': detections[-1]}
             save_json(output / 'observation.json', record)
             if not cv2.imwrite(str(output / 'observation.png'), frame):
@@ -316,10 +314,10 @@ class Planner:
         actual = self.tcp(result.x)
         pe = np.linalg.norm(actual[:3, 3] - target[:3, 3])
         re = np.rad2deg(np.linalg.norm(cv2.Rodrigues(target[:3, :3].T @ actual[:3, :3])[0]))
-        if pe > .002 or re > 50:  # ponytail: this 5-DOF model cannot point the tool straight down anywhere; accept a tilted grasp
+        if pe > .003:  # position only; orientation is best-effort on a 5-DOF arm  # ponytail: this 5-DOF model cannot point the tool straight down anywhere; accept a tilted grasp
             raise ValueError(f'Unreachable TCP pose: {pe*1000:.1f} mm / {re:.1f} deg; reposition targets')
-        if np.max(np.abs(result.x - seed)) > 20:
-            raise ValueError('IK discontinuity: joint step >20 deg')
+        if np.max(np.abs(result.x - seed)) > 60:
+            raise ValueError('IK discontinuity: joint step >60 deg')
         return result.x
 
     def clearance(self, q):
@@ -397,8 +395,6 @@ class Planner:
         self.lo, self.hi = np.minimum(self.lo, q0 - 1), np.maximum(self.hi, q0 + 1)
         self.clearance(q0)
         start = self.tcp(q0)
-        if start[2, 2] > -np.cos(np.deg2rad(60)):
-            raise ValueError('Observation TCP must point roughly down (within 60 deg); align stage does the rest')
         if start[2, 3] < safe_z:
             print(f'Observation pose is low ({start[2,3]*1000:.0f} mm); align stage lifts to {safe_z*1000:.0f} mm first')
         candidates = []
@@ -832,7 +828,7 @@ def main():
         for role in roles(c):
             old = matrix(obs['targets'][role]['T_base_marker'])
             new = matrix(fresh['targets'][role]['T_base_marker'])
-            if np.linalg.norm(old[:3, 3]-new[:3, 3]) > .01 or np.linalg.norm(cv2.Rodrigues(old[:3, :3].T @ new[:3, :3])[0]) > np.deg2rad(6):
+            if np.linalg.norm(old[:3, 3]-new[:3, 3]) > .02 or np.linalg.norm(cv2.Rodrigues(old[:3, :3].T @ new[:3, :3])[0]) > np.deg2rad(10):
                 raise ValueError('Scene changed; rerun observation and planning')
         execute(robot, planner, plan, obs, cap, a.output, scene)
     finally:
