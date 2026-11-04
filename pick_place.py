@@ -523,8 +523,7 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
                 break
             if np.max(np.abs(err)) < 4 and boosts < 3 and time.monotonic() < deadline:
                 # Gravity / load droop compensation: push the goal past the target by the measured error.
-                boosted -= err
-                planner.clearance(boosted)
+                boosted = np.clip(boosted - err, planner.lo, planner.hi)
                 robot.bus.sync_write('Goal_Position', dict(zip(planner.fk.names, boosted)) | {'gripper': grip})
                 boosts += 1
                 time.sleep(.4)
