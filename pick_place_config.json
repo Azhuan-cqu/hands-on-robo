@@ -11,7 +11,34 @@
     "id": null,
     "marker_mm": 18,
     "side_mm": 25,
-    "grasp_depth_mm": 12
+    "grasp_depth_mm": 12,
+    "hsv_ranges": [
+      [
+        [
+          0,
+          120,
+          70
+        ],
+        [
+          10,
+          255,
+          255
+        ]
+      ],
+      [
+        [
+          170,
+          120,
+          70
+        ],
+        [
+          180,
+          255,
+          255
+        ]
+      ]
+    ],
+    "min_area_px": 400
   },
   "plate": {
     "id": null,
@@ -82,5 +109,7 @@
     0,
     0
   ],
-  "pick_offset_note": "base frame, mm: [x forward from base, y, z up]; added to the grasp point"
+  "pick_offset_note": "base frame, mm: [x forward from base, y, z up]; added to the grasp point",
+  "detector": "aruco",
+  "detector_note": "'aruco' (marker on cube) or 'color' (cube.hsv_ranges, --pick-only only)"
 }
