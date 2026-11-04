@@ -1,0 +1,92 @@
+{
+  "status": "lift_operator_verified_holding",
+  "events": [
+    {
+      "time": 1793755225.741814,
+      "stage": "align",
+      "measured": {
+        "shoulder_pan": -15.736263736263735,
+        "shoulder_lift": -32.61538461538461,
+        "elbow_flex": 0.04395604395604396,
+        "wrist_flex": 101.75824175824175,
+        "wrist_roll": -94.72527472527473,
+        "gripper": 89.32621747831888
+      }
+    },
+    {
+      "time": 1793755234.252984,
+      "stage": "approach",
+      "measured": {
+        "shoulder_pan": -18.725274725274726,
+        "shoulder_lift": 22.505494505494507,
+        "elbow_flex": -25.45054945054945,
+        "wrist_flex": 101.58241758241758,
+        "wrist_roll": -97.53846153846153,
+        "gripper": 89.32621747831888
+      }
+    },
+    {
+      "time": 1793755235.110893,
+      "stage": "refine",
+      "delta_mm": [
+        -3.534311283729663,
+        -4.077909922908033,
+        0.0
+      ]
+    },
+    {
+      "time": 1793755237.803134,
+      "stage": "hover",
+      "measured": {
+        "shoulder_pan": -17.75824175824176,
+        "shoulder_lift": 24.087912087912088,
+        "elbow_flex": -10.417582417582418,
+        "wrist_flex": 89.27472527472527,
+        "wrist_roll": -96.83516483516483,
+        "gripper": 89.32621747831888
+      }
+    },
+    {
+      "time": 1793755238.5529768,
+      "stage": "descend",
+      "measured": {
+        "shoulder_pan": -17.75824175824176,
+        "shoulder_lift": 25.23076923076923,
+        "elbow_flex": -6.549450549450549,
+        "wrist_flex": 84.17582417582418,
+        "wrist_roll": -96.83516483516483,
+        "gripper": 89.25950633755836
+      }
+    },
+    {
+      "time": 1793755256.5965319,
+      "stage": "possible_contact",
+      "measured_opening": 9.939959973315544,
+      "held_command": 0
+    },
+    {
+      "time": 1793755256.6266098,
+      "stage": "grasp",
+      "measured": {
+        "shoulder_pan": -17.75824175824176,
+        "shoulder_lift": 25.23076923076923,
+        "elbow_flex": -6.549450549450549,
+        "wrist_flex": 84.17582417582418,
+        "wrist_roll": -96.83516483516483,
+        "gripper": 9.939959973315544
+      }
+    },
+    {
+      "time": 1793755260.489423,
+      "stage": "lift",
+      "measured": {
+        "shoulder_pan": -17.75824175824176,
+        "shoulder_lift": 20.13186813186813,
+        "elbow_flex": -22.9010989010989,
+        "wrist_flex": 100.61538461538461,
+        "wrist_roll": -96.83516483516483,
+        "gripper": 9.939959973315544
+      }
+    }
+  ]
+}
