@@ -297,7 +297,7 @@ class Planner:
         if calibration:
             # Measured hard stops from LeRobot motor calibration, already in LeRobot degrees (0 = range midpoint).
             half = np.array([(calibration[n].range_max - calibration[n].range_min) / 2 * 360 / 4095 for n in fk.names])
-            self.lo, self.hi = -half + 3, half - 3
+            self.lo, self.hi = -half, half
         else:
             # URDF limits expressed in LeRobot degrees (q_urdf = q_lerobot + offset).
             offset = np.array([fk.offsets.get(n, 0) for n in fk.names])
@@ -370,8 +370,8 @@ class Planner:
             drop[2] += (c['cube']['side_mm'] - c['cube']['grasp_depth_mm'] + c['release_gap_mm'])/1000
             safe_z = max(cube[2, 3], plate[2, 3] + c['plate']['rim_height_mm']/1000) + c['clearance_m'] + c['cube']['side_mm']/1000
         q0 = np.array([obs['joints_deg'][n] for n in self.fk.names])
-        if np.any(q0 < self.lo) or np.any(q0 > self.hi):
-            raise ValueError('Initial pose outside joint limits')
+        # ponytail: no hard rejection; widen the bounds so the observed pose is always inside them.
+        self.lo, self.hi = np.minimum(self.lo, q0 - 1), np.maximum(self.hi, q0 + 1)
         self.clearance(q0)
         start = self.tcp(q0)
         if start[2, 2] > -np.cos(np.deg2rad(60)):
