@@ -31,7 +31,7 @@ class PickTests(unittest.TestCase):
 
     def config(self):
         c = json.loads((ROOT/'pick_place_config.json').read_text())
-        c.update(T_gripper_tcp=np.eye(4).tolist(), table_z_m=-1,
+        c.update(detector='aruco', T_gripper_tcp=np.eye(4).tolist(), table_z_m=-1,
                  workspace_min_m=[-1, -1, -1], workspace_max_m=[1, 1, 1], gripper_open=70,
                  gripper_closed=15, tool_radius_mm=15, tcp_lowest_extent_mm=5)
         c['cube'].update(id=1, marker_mm=18, side_mm=30, grasp_depth_mm=15)
@@ -50,7 +50,7 @@ class PickTests(unittest.TestCase):
 
     def test_gates(self):
         with self.assertRaises(ValueError):
-            check_config(json.loads((ROOT/'pick_place_config.json').read_text()))
+            check_config(dict(json.loads((ROOT/'pick_place_config.json').read_text()), detector='aruco', table_z_m=None))
         check_config(self.config())
         with self.assertRaises(ValueError):
             calibration_gate({'board_position_rms_mm':31.68, 'board_rotation_rms_deg':5.8})
