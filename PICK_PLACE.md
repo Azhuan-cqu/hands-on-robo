@@ -119,7 +119,7 @@ python pick_place.py --pick-only --execute
 
 `--pick-only` 完全跳过盘子参数、盘子检测及放置路径。cube.id 留空时，第一帧必须恰好检测到一个 marker，自动选择并锁定其 ID；若有多个 marker，请遮住其他标签或设置 cube.id，程序不会任意选择。采样仍按空格开始；坐标尺寸使用配置中的 cube.marker_mm。
 
-序列为 align → approach → descend → grasp → lift。按用户要求配置中 gripper_open=100（标定范围最大张开）、gripper_closed=0（闭合终点）。闭合以小步递减；连续 8 次读数波动 ≤0.5、实际开口高于命令 ≥3、且距闭合终点 >5 时，仅判为可能接触，保持当前小闭合误差，不再继续挤压到零。空夹到底或超时不会抬起。编码器稳定不能证明夹住，抬起前需目视确认输入 yes，抬起后再次确认并写日志。结束后保持扭矩和夹持，不松开或自动返回。
+序列为 align → approach → descend → grasp → lift。按用户要求配置中 gripper_open=100（标定范围最大张开）、gripper_closed=0（闭合终点）。闭合以小步递减；连续 8 次读数波动 ≤0.5、实际开口高于命令 ≥3、且距闭合终点 >5 时，仅判为可能接触，保持当前小闭合误差，不再继续挤压到零。空夹到底或超时不会抬起。交互模式在抬起前后要求目视确认；自动模式使用下文的接触保持和实测抬升判定。结束后保持扭矩和夹持，不松开或自动返回。
 
 当前实物尺寸按用户最新说明保留：方块 250 mm，marker 180 mm；盘子另记录 reported_size_mm=[1000,1000]，未当作已知内外边界。请确认机械夹爪有足够张口；缩小配置尺寸不会改变实物是否可夹。
 
@@ -138,7 +138,7 @@ python pick_place.py --pick-only --execute
 
 原有运动控制器的收敛规则保持不变：优先误差 <1°；有限补偿后可接受 <4°。重试不会消除固定的标定/TCP 偏差。
 
-完整 pick/place 和 pick-only 均使用接触判定，抬升/转移/下降持续保持检测接触时的夹爪命令；只在 release 阶段松爪。稳定接触仍不是“确实夹住 cube”的证明，自动模式的只抓取结果记为 `lift_contact_only_unverified`，没有新增视觉持物验证。盘子须固定；重新抓取时保留原盘子坐标，cube 修正不会再平移放置点。
+完整 pick/place 和 pick-only 均使用接触判定，抬升/转移/下降持续保持检测接触时的夹爪命令；只在 release 阶段松爪。稳定接触仍不是“确实夹住 cube”的证明，自动模式通过抬升后反馈检查的只抓取结果记为 `lift_feedback_verified_holding`，并输出 `cube_picked_up=True`；这属于反馈推断，没有视觉持物验证。盘子须固定；重新抓取时保留原盘子坐标，cube 修正不会再平移放置点。
 
 日志：各观察子目录的 `observation_retries.json` 记录失败原因；`execution.json` 记录 `wrist_search`、`pregrasp_retry`、`empty_grasp_retry`、`retry_retreat` 和 `motion_failure`。`retry_plan.json` 保存最近一次重新规划结果。Q/ESC、相机故障、关节通信故障不会触发继续扫描或重抓。
 
@@ -180,3 +180,16 @@ python pick_place.py --execute --recover-place --startup-state holding
 闭合前先记为不确定，检测到接触后记为持物，释放前先记为不确定。自动执行完松爪仍记为不确定；人工确认放置完成才记为空。首次运行及旧版本没有记录时按约定默认空；已有持物/不确定记录仍须处理。默认空是初始条件假设，并非传感器识别；删除状态文件会丢失保护依据。状态记录不能自动识别滑落、断电或物体被人取走。
 
 测试：`python -m unittest -v test_startup_state test_retries test_pick_place test_calibration`。
+
+
+## 抓起结果输出
+
+`cube_picked_up` 是本次运行中“抓起检查已通过”的布尔标志：初始为 `False`，终端和 `execution.json` 都有输出。它是已完成步骤的记录，释放后不重置，不表示始终还持物，也不是 `task_complete`。
+
+闭合接触时记录实际开度和实测关节 FK 对应的 TCP 高度。lift 到位后保持夹持，连续读取 8 次反馈（采样间隔至少 0.05 s）：开度波动 ≤0.5、平均开度距闭合终点 >5、平均开度比夹持命令大至少 1（初始接触要求 3，抬升后允许一定压缩）、相对接触时的开度变化 ≤2、关节波动 ≤0.5°，且所有样本对应的 TCP 均比接触时高至少 10 mm，才输出 `cube_picked_up=True`。开度数值均为 LeRobot 0–100 单位，不是毫米。
+
+`pickup_verification.min_lift_mm` 默认 10，`max_opening_change` 默认 2。结果包含方法、抬升量、开度变化和失败原因；检查不通过则保持并停止，不继续转移。反馈只能推断“夹持着物体完成了抬升”，不能核实恰好为 25 mm cube，也无法排除夹爪机械卡住；尚无视觉身份验证或持续掉落检测。
+
+新的持物记录保存接触基准，恢复时可重新检查。旧持物记录若缺少接触高度基准，则 `cube_picked_up` 保持 `False`（未验证），仍允许已有的人工确认持物后受控放置流程，不凭空补造证据。
+
+新增离线测试：`python -m unittest -v test_pickup`。

@@ -121,5 +121,9 @@
     "wrist_scan_deg": 12,
     "grasp_attempts": 3,
     "pregrasp_attempts": 2
+  },
+  "pickup_verification": {
+    "min_lift_mm": 10.0,
+    "max_opening_change": 2.0
   }
 }

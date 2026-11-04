@@ -36,6 +36,41 @@ def contact_candidate(readings, command, closed):
                 np.mean(tail) > closed + 5 and np.mean(tail) - command >= 3)
 
 
+def pickup_settings(c):
+    return {'min_lift_mm': 10.0, 'max_opening_change': 2.0} | c.get('pickup_verification', {})
+
+
+def assess_pickup(openings, command, closed, reference, tcp_heights, joint_span_deg, c):
+    """Feedback-based inference, not object identity/width or visual verification."""
+    result = {'verified': False, 'method': 'gripper_feedback_and_fk_lift'}
+    if reference is None:
+        return result | {'reason': 'missing_grasp_reference'}
+    values = np.asarray(openings, dtype=float)
+    heights = np.asarray(tcp_heights, dtype=float)
+    if len(values) < 8 or len(heights) != len(values):
+        return result | {'reason': 'insufficient_samples'}
+    if not np.isfinite(np.r_[values, heights, command, closed, reference['opening'],
+                              reference['tcp_z_m'], joint_span_deg]).all():
+        return result | {'reason': 'non_finite_feedback'}
+    cfg = pickup_settings(c)
+    lift_mm = float((np.min(heights) - reference['tcp_z_m']) * 1000)
+    drift = float(np.max(np.abs(values - reference['opening'])))
+    result.update(opening=float(np.mean(values)), opening_span=float(np.ptp(values)),
+                  opening_change=drift, measured_lift_mm=lift_mm,
+                  joint_span_deg=float(joint_span_deg))
+    # Initial contact needs >=3 units of closing error; after lifting allow
+    # modest compression, while still requiring >=1 unit of blocked motion.
+    if np.ptp(values) > .5 or np.mean(values) <= closed + 5 or np.mean(values) - command < 1:
+        return result | {'reason': 'contact_not_retained'}
+    if drift > cfg['max_opening_change']:
+        return result | {'reason': 'opening_changed_after_lift'}
+    if joint_span_deg > .5:
+        return result | {'reason': 'arm_not_stable_after_lift'}
+    if lift_mm + 1e-6 < cfg['min_lift_mm']:
+        return result | {'reason': 'insufficient_measured_lift'}
+    return result | {'verified': True, 'reason': 'stable_contact_after_measured_lift'}
+
+
 def matrix(value):
     T = np.asarray(value, dtype=float)
     if T.shape != (4, 4) or not np.isfinite(T).all() or not np.allclose(T[3], [0, 0, 0, 1]) or not np.allclose(T[:3, :3].T @ T[:3, :3], np.eye(3), atol=1e-5) or np.linalg.det(T[:3, :3]) < .99:
@@ -50,6 +85,9 @@ def roles(c):
 
 
 def check_config(c, planning=True):
+    pickup = pickup_settings(c)
+    if not np.isfinite([pickup['min_lift_mm'], pickup['max_opening_change']]).all() or not 0 < pickup['min_lift_mm'] <= 100 or not 0 <= pickup['max_opening_change'] <= 5:
+        raise ValueError('Invalid pickup_verification thresholds')
     retry = retry_settings(c)
     for key in ('observation_attempts', 'stable_frames', 'grasp_attempts', 'pregrasp_attempts'):
         if type(retry[key]) is not int or not 1 <= retry[key] <= 10:
@@ -614,10 +652,12 @@ def recovery_plan(planner, obs):
 
 def execute(robot, planner, plan, obs, cap, out, scene=None, state_store=None, recovery=None):
     c = planner.c
-    log = {'status': 'running', 'events': []}
+    log = {'status': 'running', 'events': [], 'cube_picked_up': False}
+    print('cube_picked_up = False', flush=True)
     last = np.array([obs['joints_deg'][n] for n in planner.fk.names])
     frame_last = None
     held_grip = recovery['held_command'] if recovery else None
+    grasp_reference = recovery.get('grasp_reference') if recovery else None
     def journal(state, **details):
         if state_store is not None:
             state_store.write(state, context=recovery_context(c), **details)
@@ -681,7 +721,8 @@ def execute(robot, planner, plan, obs, cap, out, scene=None, state_store=None, r
             time.sleep(.05)
         last = target.copy()
     def close_until_contact():
-        nonlocal held_grip
+        nonlocal held_grip, grasp_reference
+        grasp_reference = None
         journal('unknown', reason='closing_gripper')
         hold, opening = read_q(robot, planner.fk)
         hold = np.array([hold[n] for n in planner.fk.names])  # drift is measured from where the arm actually settled
@@ -699,7 +740,10 @@ def execute(robot, planner, plan, obs, cap, out, scene=None, state_store=None, r
             if contact_candidate(history, command, c['gripper_closed']):
                 # Keep the small current position error; do not continue squeezing to zero.
                 held_grip = command
-                journal('holding', held_command=command, opening=actual)
+                grasp_reference = {'opening': float(np.mean(history[-8:])),
+                                   'tcp_z_m': float(planner.tcp([q[n] for n in planner.fk.names])[2, 3])}
+                journal('holding', held_command=command, opening=actual,
+                        grasp_reference=grasp_reference, cube_picked_up=False)
                 event('possible_contact', measured_opening=actual, held_command=command)
                 if not c.get('auto') and input('Possible contact detected. Is the object visibly between both fingers? Type yes to lift: ').strip().lower() != 'yes':
                     raise RuntimeError('Grasp not visually confirmed; no lift')
@@ -710,6 +754,37 @@ def execute(robot, planner, plan, obs, cap, out, scene=None, state_store=None, r
                 raise EmptyGrasp('Gripper reached closed endpoint: possible empty grasp; no lift')
             time.sleep(.05)
         raise RuntimeError('No stable contact before timeout; no lift')
+
+    def verify_pickup_after_lift():
+        openings, heights, joints = [], [], []
+        for _ in range(8):
+            check_stop()
+            q, opening = read_q(robot, planner.fk)
+            row = np.array([q[n] for n in planner.fk.names])
+            openings.append(opening)
+            joints.append(row)
+            heights.append(float(planner.tcp(row)[2, 3]))
+            time.sleep(.05)
+        evidence = assess_pickup(openings, held_grip, c['gripper_closed'], grasp_reference,
+                                 heights, float(np.max(np.ptp(joints, axis=0))), c)
+        log['pickup_verification'] = evidence
+        if not evidence['verified']:
+            event('pickup_unconfirmed', **evidence)
+            print(f"cube_picked_up = False ({evidence['reason']})", flush=True)
+            if recovery is not None and evidence['reason'] == 'missing_grasp_reference':
+                # Legacy recovery records have no measured grasp height. They can still
+                # use the explicitly operator-confirmed placement route, without claiming success.
+                return
+            raise RuntimeError('Pickup verification failed: ' + evidence['reason'])
+        if not c.get('auto'):
+            answer = input('Visually check: cube is securely lifted? Type yes to continue: ').strip().lower()
+            if answer != 'yes':
+                raise RuntimeError('Pickup not confirmed by operator')
+        journal('holding', held_command=held_grip, opening=evidence['opening'],
+                grasp_reference=grasp_reference, cube_picked_up=True, pickup_verification=evidence)
+        log['cube_picked_up'] = True
+        event('pickup_verified', **evidence)
+        print('cube_picked_up = True (gripper feedback + measured lift)', flush=True)
 
     def cube_observation(label, scan=False):
         origin, grip = read_q(robot, planner.fk)
@@ -753,6 +828,7 @@ def execute(robot, planner, plan, obs, cap, out, scene=None, state_store=None, r
         save_json(out / 'retry_plan.json', {'observation': obs, 'stages': plan})
 
     try:
+        save_json(out / 'execution.json', log)
         current, grip = read_q(robot, planner.fk)
         if max(abs(current[n]-obs['joints_deg'][n]) for n in current) > .5:
             raise ValueError('Robot changed after observation; observe again')
@@ -833,12 +909,10 @@ def execute(robot, planner, plan, obs, cap, out, scene=None, state_store=None, r
                     retreat_and_replan(pregrasp_retries < retry_settings(c)['pregrasp_attempts'])
                     i = 0
                     continue
-            if stage['stage'] == 'lift' and not c.get('auto'):
-                answer = input('Visually check: cube is securely lifted? Type yes to continue: ').strip().lower()
-                if answer != 'yes':
-                    raise RuntimeError('Pickup not confirmed')
+            if stage['stage'] == 'lift':
+                verify_pickup_after_lift()
         if c.get('pick_only'):
-            log['status'] = 'lift_contact_only_unverified' if c.get('auto') else 'lift_operator_verified_holding'
+            log['status'] = 'lift_feedback_verified_holding' if c.get('auto') else 'lift_operator_verified_holding'
             print('Lift finished. Motors remain enabled, holding the object; no release command sent.')
         else:
             answer = 'auto' if c.get('auto') else input('Visually check: cube is inside plate and gripper clear? Type yes if successful: ').strip().lower()
