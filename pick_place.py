@@ -316,7 +316,7 @@ class Planner:
         actual = self.tcp(result.x)
         pe = np.linalg.norm(actual[:3, 3] - target[:3, 3])
         re = np.rad2deg(np.linalg.norm(cv2.Rodrigues(target[:3, :3].T @ actual[:3, :3])[0]))
-        if pe > .002 or re > 35:  # ponytail: this 5-DOF model cannot point the tool straight down anywhere; accept a tilted grasp
+        if pe > .002 or re > 50:  # ponytail: this 5-DOF model cannot point the tool straight down anywhere; accept a tilted grasp
             raise ValueError(f'Unreachable TCP pose: {pe*1000:.1f} mm / {re:.1f} deg; reposition targets')
         if np.max(np.abs(result.x - seed)) > 20:
             raise ValueError('IK discontinuity: joint step >20 deg')
