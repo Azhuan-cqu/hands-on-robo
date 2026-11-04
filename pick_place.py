@@ -323,7 +323,7 @@ class Planner:
             try:
                 for name, target, grip in targets:
                     angle = cv2.Rodrigues(prev[:3, :3].T @ target[:3, :3])[0].ravel()
-                    count = max(1, int(np.ceil(np.linalg.norm(target[:3, 3]-prev[:3, 3])/.003)), int(np.ceil(np.linalg.norm(angle)/.03)))
+                    count = max(1, int(np.ceil(np.linalg.norm(target[:3, 3]-prev[:3, 3])/.01)), int(np.ceil(np.linalg.norm(angle)/.1)))
                     segment = []
                     for u in np.linspace(0, 1, count+1)[1:]:
                         goal = transform(prev[:3, :3] @ cv2.Rodrigues(angle*u)[0], (1-u)*prev[:3, 3]+u*target[:3, 3])
