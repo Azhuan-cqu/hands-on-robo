@@ -203,6 +203,37 @@ class Scene:
         return found, view
 
 
+def hsv_ranges_around(h, sat, val):
+    lo, hi = [max(0, int(h)-10), max(0, int(sat)-70), max(0, int(val)-80)], [min(180, int(h)+10), 255, 255]
+    ranges = [[lo, hi]]
+    if h < 10: ranges.append([[170 + int(h), lo[1], lo[2]], [180, 255, 255]])   # red wraps around
+    if h > 170: ranges.append([[0, lo[1], lo[2]], [int(h) - 170, 255, 255]])
+    return ranges
+
+
+def pick_color_by_click(cap, c):
+    """Show the camera; the operator clicks the cube to grasp. Its colour becomes cube.hsv_ranges for this run."""
+    state = {'hsv': None, 'done': False}
+    def on_mouse(ev, x, y, flags, _):
+        if ev == cv2.EVENT_LBUTTONDOWN and state['hsv'] is not None:
+            patch = state['hsv'][max(0, y-4):y+5, max(0, x-4):x+5].reshape(-1, 3)
+            h, sat, val = np.median(patch, axis=0)
+            c['cube']['hsv_ranges'] = hsv_ranges_around(h, sat, val); state['done'] = True
+            print(f'Target colour HSV=({int(h)},{int(sat)},{int(val)})')
+    cv2.namedWindow('Pick/place'); cv2.setMouseCallback('Pick/place', on_mouse)
+    print('CLICK the cube to grasp in the camera window (Q/ESC cancels).')
+    while not state['done']:
+        ok, frame = cap.read()
+        if not ok:
+            raise RuntimeError('Camera read failed')
+        state['hsv'] = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        cv2.putText(frame, 'CLICK the cube to grasp', (15, 30), 0, .8, (0, 255, 0), 2)
+        cv2.imshow('Pick/place', frame)
+        if cv2.waitKey(1) & 255 in (27, ord('q')):
+            raise KeyboardInterrupt
+    cv2.setMouseCallback('Pick/place', lambda *args: None)
+
+
 def read_q(robot, fk):
     values = robot.bus.sync_read('Present_Position')
     return {n: float(values[n]) for n in fk.names}, float(values['gripper'])
@@ -570,10 +601,7 @@ def main():
             if ev == cv2.EVENT_LBUTTONDOWN and state['hsv'] is not None and x < state['hsv'].shape[1]:
                 patch = state['hsv'][max(0, y-4):y+5, max(0, x-4):x+5].reshape(-1, 3)
                 h, sat, val = np.median(patch, axis=0)
-                lo, hi = [max(0, int(h)-10), max(0, int(sat)-70), max(0, int(val)-80)], [min(180, int(h)+10), 255, 255]
-                ranges = [[lo, hi]]
-                if h < 10: ranges.append([[170 + int(h), lo[1], lo[2]], [180, 255, 255]])   # red wraps around
-                if h > 170: ranges.append([[0, lo[1], lo[2]], [int(h) - 170, 255, 255]])
+                ranges = hsv_ranges_around(h, sat, val)
                 c['cube']['hsv_ranges'] = ranges; state['click'] = (x, y)
                 print(f'Picked HSV=({int(h)},{int(sat)},{int(val)}) -> hsv_ranges={ranges}. Press S to save, Q to quit.')
         win = 'Colour mask: click the cube | S save | Q quit'
@@ -641,6 +669,8 @@ def main():
             robot.bus.enable_torque(num_retry=5)
             print('Torque ON: arm is holding itself. Let go, keep hands out of view, observing...')
             time.sleep(1)
+        if c.get('detector') == 'color':
+            pick_color_by_click(cap, c)
         obs = observe(cap, robot, scene, a.output)
         print(json.dumps(obs['targets'], indent=2))
         if a.locate_only:
