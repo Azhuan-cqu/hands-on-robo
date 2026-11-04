@@ -1,0 +1,42 @@
+{
+  "status": "aborted",
+  "events": [
+    {
+      "time": 1793752204.866152,
+      "stage": "align",
+      "measured": {
+        "shoulder_pan": -24.0,
+        "shoulder_lift": -44.83516483516483,
+        "elbow_flex": 17.01098901098901,
+        "wrist_flex": 97.62637362637362,
+        "wrist_roll": -94.02197802197803,
+        "gripper": 89.32621747831888
+      }
+    },
+    {
+      "time": 1793752215.027039,
+      "stage": "approach",
+      "measured": {
+        "shoulder_pan": -28.21978021978022,
+        "shoulder_lift": 29.0989010989011,
+        "elbow_flex": -24.923076923076923,
+        "wrist_flex": 90.15384615384616,
+        "wrist_roll": -98.76923076923077,
+        "gripper": 89.32621747831888
+      }
+    },
+    {
+      "time": 1793752216.609865,
+      "stage": "descend",
+      "measured": {
+        "shoulder_pan": -28.21978021978022,
+        "shoulder_lift": 30.76923076923077,
+        "elbow_flex": -17.36263736263736,
+        "wrist_flex": 77.58241758241758,
+        "wrist_roll": -98.76923076923077,
+        "gripper": 89.25950633755836
+      }
+    }
+  ],
+  "reason": "Gripper reached closed endpoint: possible empty grasp; no lift"
+}

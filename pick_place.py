@@ -45,6 +45,12 @@ def roles(c):
 
 
 def check_config(c, planning=True):
+    if c.get('detector') == 'color':
+        if not c.get('pick_only'):
+            raise ValueError('Color detector currently supports --pick-only (no plate marker)')
+        if not c['cube'].get('hsv_ranges') or c['table_z_m'] is None or c['cube']['side_mm'] is None:
+            raise ValueError('Color detector needs cube.hsv_ranges, cube.side_mm and table_z_m')
+        c['cube'].setdefault('id', -1); c['cube'].setdefault('marker_mm', 1)
     for role in roles(c):
         for key in ('id', 'marker_mm'):
             if c[role][key] is None and not (c.get('pick_only') and key == 'id'):
@@ -128,9 +134,52 @@ class Scene:
         params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
         self.detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, c['dictionary'])), params)
 
+    def color_mask(self, frame):
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        mask = np.zeros(frame.shape[:2], np.uint8)
+        for lo, hi in self.c['cube']['hsv_ranges']:
+            mask |= cv2.inRange(hsv, np.array(lo, np.uint8), np.array(hi, np.uint8))
+        return cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+
+    def pixel_to_plane(self, T_base_cam, px, z_plane):
+        """Cast the ray through pixel px and intersect with the horizontal plane z=z_plane (base frame)."""
+        und = cv2.undistortPoints(np.array([[px]], np.float64), self.K, self.D).reshape(2)
+        ray = T_base_cam[:3, :3] @ np.array([und[0], und[1], 1.0])
+        origin = T_base_cam[:3, 3]
+        if abs(ray[2]) < 1e-6 or (z_plane - origin[2]) / ray[2] <= 0:
+            raise ValueError('Ray does not hit the table plane in front of the camera')
+        return origin + ray * (z_plane - origin[2]) / ray[2]
+
+    def detect_color(self, frame, q):
+        """Cube by color: top-face centroid cast onto the plane z = table + side. Needs FK + hand-eye only."""
+        view = frame.copy()
+        mask = self.color_mask(frame)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours = [k for k in contours if cv2.contourArea(k) > self.c['cube'].get('min_area_px', 400)]
+        if not contours:
+            return {}, cv2.addWeighted(view, .7, cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR), .3, 0)
+        blob = max(contours, key=cv2.contourArea)
+        (cx, cy), (w, h), angle = cv2.minAreaRect(blob)
+        cv2.drawContours(view, [cv2.boxPoints(((cx, cy), (w, h), angle)).astype(int)], 0, (0, 255, 0), 2)
+        T_base_cam = self.fk(q) @ self.X
+        top = self.c['table_z_m'] + self.c['cube']['side_mm'] / 1000
+        centre = self.pixel_to_plane(T_base_cam, (cx, cy), top)
+        # yaw: direction of one rectangle edge, cast onto the same plane
+        a = np.deg2rad(angle)
+        edge = self.pixel_to_plane(T_base_cam, (cx + 20 * np.cos(a), cy + 20 * np.sin(a)), top) - centre
+        x = np.array([edge[0], edge[1], 0]); x /= np.linalg.norm(x) + 1e-12
+        R = np.column_stack([x, np.cross([0, 0, 1], x), [0, 0, 1]])
+        B = transform(R, centre)
+        C = np.linalg.inv(T_base_cam) @ B
+        cv2.drawFrameAxes(view, self.K, self.D, cv2.Rodrigues(C[:3, :3])[0], C[:3, 3], .025)
+        return {'cube': {'T_base_marker': B.tolist(), 'T_camera_marker': C.tolist(), 'id': -1, 'rms_px': 0.0,
+                         'pixel': [float(cx), float(cy)], 'area_px': float(cv2.contourArea(blob))}}, view
+
     def detect(self, frame, q):
         if (frame.shape[1], frame.shape[0]) != self.size:
             raise ValueError('Camera resolution differs from calibration')
+        if self.c.get('detector') == 'color':
+            return self.detect_color(frame, q)
         corners, ids, _ = self.detector.detectMarkers(frame)
         view = frame.copy()
         found = {}
@@ -504,15 +553,34 @@ def main():
     p.add_argument('--pick-only', action='store_true', help='Auto-select one marker, grasp and lift; no plate required')
     p.add_argument('--teach-tcp', action='store_true')
     p.add_argument('--scan-markers', action='store_true', help='Show detected IDs without connecting robot')
+    p.add_argument('--scan-color', action='store_true', help='Preview the colour mask (tune cube.hsv_ranges); no robot')
     p.add_argument('--ignore-calibration-gate', action='store_true', help='Execute even if hand-eye consistency is poor (expect misses)')
     p.add_argument('--auto', action='store_true', help='No keypresses or confirmations: capture when still, run the plan straight through')
     a = p.parse_args()
-    if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers]) > 1:
+    if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers, a.scan_color]) > 1:
         p.error('Choose only one mode')
     c = json.loads(a.config.read_text())
     c['pick_only'] = a.pick_only
     c['auto'] = a.auto
     a.output.mkdir(parents=True, exist_ok=True)
+    if a.scan_color:
+        cap = open_camera(c['camera'], 1280, 720)
+        hsv_lo = np.array(c['cube']['hsv_ranges'][0][0], np.uint8); hsv_hi = np.array(c['cube']['hsv_ranges'][0][1], np.uint8)
+        try:
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    raise RuntimeError('Camera read failed')
+                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                mask = np.zeros(frame.shape[:2], np.uint8)
+                for lo, hi in c['cube']['hsv_ranges']:
+                    mask |= cv2.inRange(hsv, np.array(lo, np.uint8), np.array(hi, np.uint8))
+                cv2.imshow('Colour mask (Q quits)', np.hstack([frame, cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)]))
+                if cv2.waitKey(1) & 255 in (27, ord('q')):
+                    break
+        finally:
+            cap.release(); cv2.destroyAllWindows()
+        return
     if a.scan_markers:
         cap = open_camera(c['camera'], 1280, 720)
         detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, c['dictionary'])))
