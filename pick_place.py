@@ -411,10 +411,11 @@ def execute(robot, planner, plan, obs, cap, out):
         deadline = time.monotonic()+3
         while True:
             measured, measured_grip = read_q(robot, planner.fk)
-            if max(abs(measured[n]-target[i]) for i,n in enumerate(planner.fk.names)) < 2 and (allow_gripper_contact or abs(measured_grip-grip) < 5):
+            if max(abs(measured[n]-target[i]) for i,n in enumerate(planner.fk.names)) < 4 and (allow_gripper_contact or abs(measured_grip-grip) < 10):
                 break
             if time.monotonic() > deadline:
-                raise RuntimeError('Motion failed to settle')
+                diff = {n: round(measured[n]-target[i], 1) for i, n in enumerate(planner.fk.names)} | {'gripper': round(measured_grip-grip, 1)}
+                raise RuntimeError(f'Motion failed to settle; measured-target = {diff}')
             check_stop()
             time.sleep(.05)
         last = target.copy()

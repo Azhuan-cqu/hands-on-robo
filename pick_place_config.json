@@ -67,7 +67,7 @@
     0.45,
     0.5
   ],
-  "gripper_open": 100,
+  "gripper_open": 90,
   "gripper_closed": 0,
   "clearance_m": 0.05,
   "link_radius_m": 0.035,
