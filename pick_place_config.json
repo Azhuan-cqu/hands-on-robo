@@ -110,6 +110,6 @@
     0
   ],
   "pick_offset_note": "base frame, mm: [x forward from base, y, z up]; added to the grasp point",
-  "detector": "aruco",
+  "detector": "color",
   "detector_note": "'aruco' (marker on cube) or 'color' (cube.hsv_ranges, --pick-only only)"
 }
