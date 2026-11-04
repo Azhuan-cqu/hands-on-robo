@@ -83,7 +83,7 @@
       1.0
     ]
   ],
-  "table_z_m": -0.008,
+  "table_z_m": -0.018,
   "workspace_min_m": [
     -0.45,
     -0.45,
@@ -107,7 +107,7 @@
   "pick_offset_mm": [
     0,
     0,
-    -8
+    -18
   ],
   "pick_offset_note": "base frame, mm: [x forward from base, y, z up]; added to the grasp point",
   "detector": "aruco",
