@@ -93,7 +93,8 @@ def calibration_gate(h):
         raise ValueError('Execution blocked: hand-eye consistency exceeds 5 mm / 2 deg. Recalibrate and validate on independent poses.')
 
 
-def marker_pose(corners, side_m, K, D, max_rms=1.5):
+def marker_pose(corners, side_m, K, D, max_rms=1.5, up_hint=None):
+    """up_hint: base 'up' direction expressed in the camera frame; resolves the planar ambiguity."""
     s = side_m / 2
     obj = np.array([[-s, s, 0], [s, s, 0], [s, -s, 0], [-s, -s, 0]], dtype=np.float64)
     img = np.asarray(corners, dtype=np.float64).reshape(4, 1, 2)
@@ -107,12 +108,9 @@ def marker_pose(corners, side_m, K, D, max_rms=1.5):
     candidates.sort(key=lambda x: x[0])
     if not candidates or candidates[0][0] > max_rms:
         raise ValueError('Marker PnP reprojection too large / no valid solution')
-    if len(candidates) > 1:
-        e0, a = candidates[0]
-        e1, b = candidates[1]
-        angle = np.rad2deg(np.linalg.norm(cv2.Rodrigues(a[:3, :3].T @ b[:3, :3])[0]))
-        if e1 - e0 < .15 and angle > 10:
-            raise ValueError('Ambiguous planar marker pose: change camera viewpoint')
+    if up_hint is not None and len(candidates) > 1 and candidates[1][0] - candidates[0][0] < .15:
+        # Planar ambiguity: both solutions fit; the marker lies flat, so take the one whose normal points up.
+        candidates.sort(key=lambda x: -float(up_hint @ x[1][:3, :3] @ [0, 0, 1]))
     return candidates[0]
 
 
@@ -193,8 +191,9 @@ class Scene:
                 indices = np.flatnonzero(ids.ravel() == target_id)
                 if len(indices) != 1:
                     continue
-                error, C = marker_pose(corners[indices[0]], self.c[role]['marker_mm'] / 1000, self.K, self.D)
-                B = self.fk(q) @ self.X @ C
+                T_base_cam = self.fk(q) @ self.X
+                error, C = marker_pose(corners[indices[0]], self.c[role]['marker_mm'] / 1000, self.K, self.D, up_hint=T_base_cam[:3, :3].T @ [0, 0, 1])
+                B = T_base_cam @ C
                 if B[2, 2] < np.cos(np.deg2rad(20)):
                     raise ValueError(f'{role}: expected upward marker on horizontal top surface')
                 found[role] = {'T_base_marker': B.tolist(), 'T_camera_marker': C.tolist(), 'id': int(target_id), 'rms_px': error}
