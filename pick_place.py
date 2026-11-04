@@ -170,7 +170,7 @@ def observe(cap, robot, scene, output):
         key = cv2.waitKey(1) & 255
         if key in (27, ord('q')):
             raise KeyboardInterrupt
-        if key != 32:
+        if key != 32 and not scene.c.get('auto'):
             continue
         readings, detections = [], []
         try:
@@ -205,6 +205,8 @@ def observe(cap, robot, scene, output):
             return record
         except ValueError as e:
             print('Capture rejected:', e)
+            if scene.c.get('auto'):
+                time.sleep(1)
 
 
 class Planner:
@@ -422,7 +424,7 @@ def execute(robot, planner, plan, obs, cap, out):
             if contact_candidate(history, command, c['gripper_closed']):
                 # Keep the small current position error; do not continue squeezing to zero.
                 event('possible_contact', measured_opening=actual, held_command=command)
-                if input('Possible contact detected. Is the object visibly between both fingers? Type yes to lift: ').strip().lower() != 'yes':
+                if not c.get('auto') and input('Possible contact detected. Is the object visibly between both fingers? Type yes to lift: ').strip().lower() != 'yes':
                     raise RuntimeError('Grasp not visually confirmed; no lift')
                 return command
             if actual <= c['gripper_closed'] + 2:
@@ -448,7 +450,7 @@ def execute(robot, planner, plan, obs, cap, out):
             for row in stage['joints_deg']:
                 move(np.array(row), grip_command, stage['stage'] in ('grasp', 'lift', 'transfer', 'place'))
             event(stage['stage'], measured=robot.bus.sync_read('Present_Position'))
-            if stage['stage'] == 'lift':
+            if stage['stage'] == 'lift' and not c.get('auto'):
                 answer = input('Visually check: cube is securely lifted? Type yes to continue: ').strip().lower()
                 if answer != 'yes':
                     raise RuntimeError('Pickup not confirmed')
@@ -456,7 +458,7 @@ def execute(robot, planner, plan, obs, cap, out):
             log['status'] = 'lift_operator_verified_holding'
             print('Lift finished. Motors remain enabled, holding the object; no release command sent.')
         else:
-            answer = input('Visually check: cube is inside plate and gripper clear? Type yes if successful: ').strip().lower()
+            answer = 'auto' if c.get('auto') else input('Visually check: cube is inside plate and gripper clear? Type yes if successful: ').strip().lower()
             log['status'] = 'success_operator_verified' if answer == 'yes' else 'placement_not_verified'
     except BaseException as e:
         log['status'] = 'aborted'
@@ -482,11 +484,13 @@ def main():
     p.add_argument('--teach-tcp', action='store_true')
     p.add_argument('--scan-markers', action='store_true', help='Show detected IDs without connecting robot')
     p.add_argument('--ignore-calibration-gate', action='store_true', help='Execute even if hand-eye consistency is poor (expect misses)')
+    p.add_argument('--auto', action='store_true', help='No keypresses or confirmations: capture when still, run the plan straight through')
     a = p.parse_args()
     if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers]) > 1:
         p.error('Choose only one mode')
     c = json.loads(a.config.read_text())
     c['pick_only'] = a.pick_only
+    c['auto'] = a.auto
     a.output.mkdir(parents=True, exist_ok=True)
     if a.scan_markers:
         cap = open_camera(c['camera'], 1280, 720)
@@ -538,7 +542,7 @@ def main():
             print('Plan saved. No motion commands sent. Inspect plan and physical clearance before --execute.')
             return
         print('Support arm during controller setup. Clear path/table/plate rim and check gripper geometry. Q/ESC in camera window or Ctrl-C stops commands and attempts hold.')
-        if input('Scene unchanged and path reviewed? Type execute: ').strip() != 'execute':
+        if not a.auto and input('Scene unchanged and path reviewed? Type execute: ').strip() != 'execute':
             return
         # Reject stale target positions after human review; plan must describe this observation.
         fresh = observe(cap, robot, scene, a.output/'recheck')
