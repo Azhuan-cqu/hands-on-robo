@@ -565,19 +565,37 @@ def main():
     a.output.mkdir(parents=True, exist_ok=True)
     if a.scan_color:
         cap = open_camera(c['camera'], 1280, 720)
-        hsv_lo = np.array(c['cube']['hsv_ranges'][0][0], np.uint8); hsv_hi = np.array(c['cube']['hsv_ranges'][0][1], np.uint8)
+        state = {'hsv': None, 'click': None}
+        def on_mouse(ev, x, y, flags, _):
+            if ev == cv2.EVENT_LBUTTONDOWN and state['hsv'] is not None and x < state['hsv'].shape[1]:
+                patch = state['hsv'][max(0, y-4):y+5, max(0, x-4):x+5].reshape(-1, 3)
+                h, sat, val = np.median(patch, axis=0)
+                lo, hi = [max(0, int(h)-10), max(0, int(sat)-70), max(0, int(val)-80)], [min(180, int(h)+10), 255, 255]
+                ranges = [[lo, hi]]
+                if h < 10: ranges.append([[170 + int(h), lo[1], lo[2]], [180, 255, 255]])   # red wraps around
+                if h > 170: ranges.append([[0, lo[1], lo[2]], [int(h) - 170, 255, 255]])
+                c['cube']['hsv_ranges'] = ranges; state['click'] = (x, y)
+                print(f'Picked HSV=({int(h)},{int(sat)},{int(val)}) -> hsv_ranges={ranges}. Press S to save, Q to quit.')
+        win = 'Colour mask: click the cube | S save | Q quit'
+        cv2.namedWindow(win); cv2.setMouseCallback(win, on_mouse)
         try:
             while True:
                 ok, frame = cap.read()
                 if not ok:
                     raise RuntimeError('Camera read failed')
-                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                state['hsv'] = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
                 mask = np.zeros(frame.shape[:2], np.uint8)
                 for lo, hi in c['cube']['hsv_ranges']:
-                    mask |= cv2.inRange(hsv, np.array(lo, np.uint8), np.array(hi, np.uint8))
-                cv2.imshow('Colour mask (Q quits)', np.hstack([frame, cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)]))
-                if cv2.waitKey(1) & 255 in (27, ord('q')):
+                    mask |= cv2.inRange(state['hsv'], np.array(lo, np.uint8), np.array(hi, np.uint8))
+                if state['click']:
+                    cv2.circle(frame, state['click'], 8, (0, 255, 0), 2)
+                cv2.imshow(win, np.hstack([frame, cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)]))
+                key = cv2.waitKey(1) & 255
+                if key in (27, ord('q')):
                     break
+                if key == ord('s'):
+                    saved = json.loads(a.config.read_text()); saved['cube']['hsv_ranges'] = c['cube']['hsv_ranges']
+                    save_json(a.config, saved); print('Saved hsv_ranges to', a.config)
         finally:
             cap.release(); cv2.destroyAllWindows()
         return
