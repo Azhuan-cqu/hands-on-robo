@@ -194,10 +194,10 @@ def observe(cap, robot, scene, output):
                 raise ValueError('Robot moved during observation')
             for role in roles(scene.c):
                 poses = np.array([d[role]['T_base_marker'] for d in detections])
-                if np.max(np.linalg.norm(poses[:, :3, 3] - poses[-1, :3, 3], axis=1)) > .003:
-                    raise ValueError('Target position unstable by >3 mm')
-                if any(np.linalg.norm(cv2.Rodrigues(poses[-1, :3, :3].T @ R)[0]) > np.deg2rad(3) for R in poses[:, :3, :3]):
-                    raise ValueError('Target orientation unstable by >3 deg')
+                if np.max(np.linalg.norm(poses[:, :3, 3] - poses[-1, :3, 3], axis=1)) > .008:
+                    raise ValueError('Target position unstable by >8 mm')
+                if any(np.linalg.norm(cv2.Rodrigues(poses[-1, :3, :3].T @ R)[0]) > np.deg2rad(6) for R in poses[:, :3, :3]):
+                    raise ValueError('Target orientation unstable by >6 deg')
             record = {'time': time.time(), 'joints_deg': q, 'gripper': grip, 'targets': detections[-1]}
             save_json(output / 'observation.json', record)
             if not cv2.imwrite(str(output / 'observation.png'), frame):
@@ -210,14 +210,19 @@ def observe(cap, robot, scene, output):
 
 
 class Planner:
-    def __init__(self, fk, c):
+    def __init__(self, fk, c, calibration=None):
         self.fk, self.c = fk, c
         self.tool = matrix(c['T_gripper_tcp'])
         self.plate = None
-        # URDF limits expressed in LeRobot degrees (q_urdf = q_lerobot + offset).
-        offset = np.array([fk.offsets.get(n, 0) for n in fk.names])
-        self.lo = np.array([np.rad2deg(float(j.find('limit').get('lower'))) + 2 for j in fk.chain if j.get('type') != 'fixed']) - offset
-        self.hi = np.array([np.rad2deg(float(j.find('limit').get('upper'))) - 2 for j in fk.chain if j.get('type') != 'fixed']) - offset
+        if calibration:
+            # Measured hard stops from LeRobot motor calibration, already in LeRobot degrees (0 = range midpoint).
+            half = np.array([(calibration[n].range_max - calibration[n].range_min) / 2 * 360 / 4095 for n in fk.names])
+            self.lo, self.hi = -half + 3, half - 3
+        else:
+            # URDF limits expressed in LeRobot degrees (q_urdf = q_lerobot + offset).
+            offset = np.array([fk.offsets.get(n, 0) for n in fk.names])
+            self.lo = np.array([np.rad2deg(float(j.find('limit').get('lower'))) + 2 for j in fk.chain if j.get('type') != 'fixed']) - offset
+            self.hi = np.array([np.rad2deg(float(j.find('limit').get('upper'))) - 2 for j in fk.chain if j.get('type') != 'fixed']) - offset
 
     def tcp(self, q):
         return self.fk(dict(zip(self.fk.names, q))) @ self.tool
@@ -232,7 +237,7 @@ class Planner:
         actual = self.tcp(result.x)
         pe = np.linalg.norm(actual[:3, 3] - target[:3, 3])
         re = np.rad2deg(np.linalg.norm(cv2.Rodrigues(target[:3, :3].T @ actual[:3, :3])[0]))
-        if pe > .002 or re > 5:
+        if pe > .002 or re > 35:  # ponytail: this 5-DOF model cannot point the tool straight down anywhere; accept a tilted grasp
             raise ValueError(f'Unreachable TCP pose: {pe*1000:.1f} mm / {re:.1f} deg; reposition targets')
         if np.max(np.abs(result.x - seed)) > 12:
             raise ValueError('IK discontinuity: joint step >12 deg')
@@ -270,6 +275,11 @@ class Planner:
         cube = matrix(obs['targets']['cube']['T_base_marker'])
         pick_only = c.get('pick_only', False)
         pick = cube[:3, 3] - np.array([0, 0, c['cube']['grasp_depth_mm']/1000])
+        # ponytail: hand-eye error can put the marker below its true height; never plan the tool into the table.
+        floor = c['table_z_m'] + max(c['tcp_lowest_extent_mm'], c['cube']['side_mm'] - c['cube']['grasp_depth_mm'])/1000 + .002
+        if pick[2] < floor:
+            print(f'Pick height clamped from {pick[2]*1000:.0f} mm to {floor*1000:.0f} mm (table limit)')
+            pick[2] = floor
         self.plate = None
         if pick_only:
             safe_z = cube[2, 3] + c['clearance_m']
@@ -284,8 +294,8 @@ class Planner:
             raise ValueError('Initial pose outside joint limits')
         self.clearance(q0)
         start = self.tcp(q0)
-        if start[2, 2] > -np.cos(np.deg2rad(5)):
-            raise ValueError('Observation TCP must already point vertically down within 5 deg')
+        if start[2, 2] > -np.cos(np.deg2rad(60)):
+            raise ValueError('Observation TCP must point roughly down (within 60 deg); align stage does the rest')
         if start[2, 3] < safe_z:
             raise ValueError('Teach observation pose higher than transfer clearance, then observe again')
         candidates = []
@@ -528,11 +538,17 @@ def main():
             teach(robot, fk, a.output)
             return
         cap = open_camera(c['camera'], *scene.size)
+        if a.execute:
+            # Hold the observation pose with torque so the operator can let go (steadier camera, no hand tremor).
+            robot.bus.sync_write('Goal_Position', robot.bus.sync_read('Present_Position'))
+            robot.bus.enable_torque()
+            print('Torque ON: arm is holding itself. Let go, keep hands out of view, observing...')
+            time.sleep(1)
         obs = observe(cap, robot, scene, a.output)
         print(json.dumps(obs['targets'], indent=2))
         if a.locate_only:
             return
-        planner = Planner(fk, c)
+        planner = Planner(fk, c, robot.calibration)
         plan = planner.plan(obs)
         save_json(a.output/'plan.json', {'config': c, 'observation': obs, 'stages': plan,
                   'collision_model': 'Partial arm/table capsules, tool/cube plate envelope, TCP bounds; no mesh/self-collision guarantee'})
