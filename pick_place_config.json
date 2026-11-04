@@ -62,19 +62,19 @@
       -0.9999999999964793,
       0.0,
       2.65358979335273e-06,
-      -0.0059253803036634755
+      -0.014160687377614072
     ],
     [
       -0.0,
       1.0,
       0.0,
-      0.011736539957739704
+      0.015758145180807433
     ],
     [
       -2.65358979335273e-06,
       -0.0,
       -0.9999999999964793,
-      -0.1039369412092726
+      -0.10617444178525771
     ],
     [
       0.0,
@@ -103,7 +103,7 @@
   "tool_radius_mm": 15,
   "tcp_lowest_extent_mm": 10,
   "tcp_source": "fingers centre from descend screenshot",
-  "tcp_status": "shift from URDF [2.0, 12.0, -5.8] mm (gripper frame)",
+  "tcp_status": "shift from URDF [2.0, 12.0, -5.8] mm (gripper frame); manual nudge image-left 8 mm, up 5 mm = gripper [-8.2, 4.0, -2.2] mm",
   "pick_offset_mm": [
     0,
     0,
