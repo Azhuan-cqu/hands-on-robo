@@ -107,7 +107,7 @@
   "pick_offset_mm": [
     0,
     0,
-    10
+    3
   ],
   "pick_offset_note": "base frame, mm: [x forward from base, y, z up]; added to the grasp point",
   "detector": "color",
