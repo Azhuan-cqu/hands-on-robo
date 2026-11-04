@@ -1,0 +1,4738 @@
+{
+  "board": {
+    "squares_x": 7,
+    "squares_y": 5,
+    "square_mm": 25,
+    "marker_mm": 18,
+    "dictionary": "DICT_4X4_50",
+    "legacy_pattern": false
+  },
+  "base_frame": "base_link",
+  "gripper_frame": "gripper_link",
+  "robot_id": "my_awesome_follower_arm",
+  "urdf": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- Generated using onshape-to-robot -->\n<!-- Onshape https://cad.onshape.com/documents/7715cc284bb430fe6dab4ffd/w/4fd0791b683777b02f8d975a/e/826c553ede3b7592eb9ca800 -->\n<robot name=\"so101_new_calib\">\n\n  <!-- Materials -->\n  <material name=\"3d_printed\">\n    <color rgba=\"1.0 0.82 0.12 1.0\"/>\n  </material>\n  <material name=\"sts3215\">\n    <color rgba=\"0.1 0.1 0.1 1.0\"/>\n  </material>\n\n  <!-- Link base -->\n  <link name=\"base_link\">\n    <inertial>\n      <origin xyz=\"0.0137179 -5.19711e-05 0.0334843\" rpy=\"0 0 0\"/>\n      <mass value=\"0.147\"/>\n      <inertia ixx=\"0.000114686\" ixy=\"-4.59787e-07\" ixz=\"4.97151e-06\" iyy=\"0.000136117\" iyz=\"9.75275e-08\" izz=\"0.000130364\"/>\n    </inertial>\n    <!-- Part base_motor_holder_so101_v1 -->\n    <visual>\n      <origin xyz=\"-0.00636471 -9.94414e-05 -0.0024\" rpy=\"1.5708 -1.67685e-15 1.5708\"/>\n      <geometry>\n        <mesh filename=\"assets/base_motor_holder_so101_v1.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.00636471 -9.94414e-05 -0.0024\" rpy=\"1.5708 -1.67685e-15 1.5708\"/>\n      <geometry>\n        <mesh filename=\"assets/base_motor_holder_so101_v1.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part base_so101_v2 -->\n    <visual>\n      <origin xyz=\"-0.00636471 -8.97657e-09 -0.0024\" rpy=\"1.5708 -2.78073e-29 1.5708\"/>\n      <geometry>\n        <mesh filename=\"assets/base_so101_v2.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.00636471 -8.97657e-09 -0.0024\" rpy=\"1.5708 -2.78073e-29 1.5708\"/>\n      <geometry>\n        <mesh filename=\"assets/base_so101_v2.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part sts3215_03a_v1 -->\n    <visual>\n      <origin xyz=\"0.0263353 -8.97657e-09 0.0437\" rpy=\"-8.21148e-16 7.84513e-18 1.249e-15\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n      <material name=\"sts3215\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"0.0263353 -8.97657e-09 0.0437\" rpy=\"-8.21148e-16 7.84513e-18 1.249e-15\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part waveshare_mounting_plate_so101_v2 -->\n    <visual>\n      <origin xyz=\"-0.0309827 -0.000199441 0.0474\" rpy=\"1.5708 -1.35493e-14 1.5708\"/>\n      <geometry>\n        <mesh filename=\"assets/waveshare_mounting_plate_so101_v2.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.0309827 -0.000199441 0.0474\" rpy=\"1.5708 -1.35493e-14 1.5708\"/>\n      <geometry>\n        <mesh filename=\"assets/waveshare_mounting_plate_so101_v2.stl\"/>\n      </geometry>\n    </collision>\n  </link>\n\n  <!-- Link shoulder -->\n  <link name=\"shoulder_link\">\n    <inertial>\n      <origin xyz=\"-0.0307604 -1.66727e-05 -0.0252713\" rpy=\"0 0 0\"/>\n      <mass value=\"0.100006\"/>\n      <inertia ixx=\"8.3759e-05\" ixy=\"7.55525e-08\" ixz=\"-1.16342e-06\" iyy=\"8.10403e-05\" iyz=\"1.54663e-07\" izz=\"2.39783e-05\"/>\n    </inertial>\n    <!-- Part sts3215_03a_v1_2 -->\n    <visual>\n      <origin xyz=\"-0.0303992 0.000422241 -0.0417\" rpy=\"1.5708 1.5708 0\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n      <material name=\"sts3215\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.0303992 0.000422241 -0.0417\" rpy=\"1.5708 1.5708 0\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part motor_holder_so101_base_v1 -->\n    <visual>\n      <origin xyz=\"-0.0675992 -0.000177759 0.0158499\" rpy=\"1.5708 -1.5708 0\"/>\n      <geometry>\n        <mesh filename=\"assets/motor_holder_so101_base_v1.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.0675992 -0.000177759 0.0158499\" rpy=\"1.5708 -1.5708 0\"/>\n      <geometry>\n        <mesh filename=\"assets/motor_holder_so101_base_v1.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part rotation_pitch_so101_v1 -->\n    <visual>\n      <origin xyz=\"0.0122008 2.22413e-05 0.0464\" rpy=\"-1.5708 2.35221e-33 0\"/>\n      <geometry>\n        <mesh filename=\"assets/rotation_pitch_so101_v1.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"0.0122008 2.22413e-05 0.0464\" rpy=\"-1.5708 2.35221e-33 0\"/>\n      <geometry>\n        <mesh filename=\"assets/rotation_pitch_so101_v1.stl\"/>\n      </geometry>\n    </collision>\n  </link>\n\n  <!-- Link upper_arm -->\n  <link name=\"upper_arm_link\">\n    <inertial>\n      <origin xyz=\"-0.0898471 -0.00838224 0.0184089\" rpy=\"0 0 0\"/>\n      <mass value=\"0.103\"/>\n      <inertia ixx=\"4.08002e-05\" ixy=\"-1.97819e-05\" ixz=\"-4.03016e-08\" iyy=\"0.000147318\" iyz=\"8.97326e-09\" izz=\"0.000142487\"/>\n    </inertial>\n    <!-- Part sts3215_03a_v1_3 -->\n    <visual>\n      <origin xyz=\"-0.11257 -0.0155 0.0187\" rpy=\"-3.14159 -5.27356e-16 -1.5708\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n      <material name=\"sts3215\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.11257 -0.0155 0.0187\" rpy=\"-3.14159 -5.27356e-16 -1.5708\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part upper_arm_so101_v1 -->\n    <visual>\n      <origin xyz=\"-0.065085 0.012 0.0182\" rpy=\"3.14159 -0 -1.30911e-30\"/>\n      <geometry>\n        <mesh filename=\"assets/upper_arm_so101_v1.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.065085 0.012 0.0182\" rpy=\"3.14159 -0 -1.30911e-30\"/>\n      <geometry>\n        <mesh filename=\"assets/upper_arm_so101_v1.stl\"/>\n      </geometry>\n    </collision>\n  </link>\n\n  <!-- Link lower_arm -->\n  <link name=\"lower_arm_link\">\n    <inertial>\n      <origin xyz=\"-0.0980701 0.00324376 0.0182831\" rpy=\"0 0 0\"/>\n      <mass value=\"0.104\"/>\n      <inertia ixx=\"2.87438e-05\" ixy=\"7.41152e-06\" ixz=\"1.26409e-06\" iyy=\"0.000159844\" iyz=\"-4.90188e-08\" izz=\"0.00014529\"/>\n    </inertial>\n    <!-- Part under_arm_so101_v1 -->\n    <visual>\n      <origin xyz=\"-0.0648499 -0.032 0.0182\" rpy=\"3.14159 -0 6.67202e-31\"/>\n      <geometry>\n        <mesh filename=\"assets/under_arm_so101_v1.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.0648499 -0.032 0.0182\" rpy=\"3.14159 -0 6.67202e-31\"/>\n      <geometry>\n        <mesh filename=\"assets/under_arm_so101_v1.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part motor_holder_so101_wrist_v1 -->\n    <visual>\n      <origin xyz=\"-0.0648499 -0.032 0.018\" rpy=\"-3.14159 -2.55351e-15 -1.83387e-30\"/>\n      <geometry>\n        <mesh filename=\"assets/motor_holder_so101_wrist_v1.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.0648499 -0.032 0.018\" rpy=\"-3.14159 -2.55351e-15 -1.83387e-30\"/>\n      <geometry>\n        <mesh filename=\"assets/motor_holder_so101_wrist_v1.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part sts3215_03a_v1_4 -->\n    <visual>\n      <origin xyz=\"-0.1224 0.0052 0.0187\" rpy=\"-3.14159 -7.88861e-31 -3.14159\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n      <material name=\"sts3215\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-0.1224 0.0052 0.0187\" rpy=\"-3.14159 -7.88861e-31 -3.14159\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n    </collision>\n  </link>\n\n  <!-- Link wrist -->\n  <link name=\"wrist_link\">\n    <inertial>\n      <origin xyz=\"-0.000103312 -0.0386143 0.0281156\" rpy=\"0 0 0\"/>\n      <mass value=\"0.079\"/>\n      <inertia ixx=\"3.68263e-05\" ixy=\"1.7893e-08\" ixz=\"-5.28128e-08\" iyy=\"2.5391e-05\" iyz=\"3.6412e-06\" izz=\"2.1e-05\"/>\n    </inertial>\n    <!-- Part sts3215_03a_no_horn_v1 -->\n    <visual>\n      <origin xyz=\"8.32667e-17 -0.0424 0.0306\" rpy=\"1.5708 1.5708 0\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_no_horn_v1.stl\"/>\n      </geometry>\n      <material name=\"sts3215\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"8.32667e-17 -0.0424 0.0306\" rpy=\"1.5708 1.5708 0\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_no_horn_v1.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part wrist_roll_pitch_so101_v2 -->\n    <visual>\n      <origin xyz=\"0 -0.028 0.0181\" rpy=\"-1.5708 -1.5708 0\"/>\n      <geometry>\n        <mesh filename=\"assets/wrist_roll_pitch_so101_v2.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"0 -0.028 0.0181\" rpy=\"-1.5708 -1.5708 0\"/>\n      <geometry>\n        <mesh filename=\"assets/wrist_roll_pitch_so101_v2.stl\"/>\n      </geometry>\n    </collision>\n  </link>\n\n  <!-- Link gripper -->\n  <link name=\"gripper_link\">\n    <inertial>\n      <origin xyz=\"0.000213627 0.000245138 -0.025187\" rpy=\"0 0 0\"/>\n      <mass value=\"0.087\"/>\n      <inertia ixx=\"2.75087e-05\" ixy=\"-3.35241e-07\" ixz=\"-5.7352e-06\" iyy=\"4.33657e-05\" iyz=\"-5.17847e-08\" izz=\"3.45059e-05\"/>\n    </inertial>\n    <!-- Part sts3215_03a_v1_5 -->\n    <visual>\n      <origin xyz=\"0.0077 0.0001 -0.0234\" rpy=\"-1.5708 -5.19179e-17 -1.66533e-16\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n      <material name=\"sts3215\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"0.0077 0.0001 -0.0234\" rpy=\"-1.5708 -5.19179e-17 -1.66533e-16\"/>\n      <geometry>\n        <mesh filename=\"assets/sts3215_03a_v1.stl\"/>\n      </geometry>\n    </collision>\n    <!-- Part wrist_roll_follower_so101_v1 -->\n    <visual>\n      <origin xyz=\"8.32667e-17 -0.000218214 0.000949706\" rpy=\"-3.14159 -5.55112e-17 0\"/>\n      <geometry>\n        <mesh filename=\"assets/wrist_roll_follower_so101_v1.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"8.32667e-17 -0.000218214 0.000949706\" rpy=\"-3.14159 -5.55112e-17 0\"/>\n      <geometry>\n        <mesh filename=\"assets/wrist_roll_follower_so101_v1.stl\"/>\n      </geometry>\n    </collision>\n  </link>\n\n  <!-- Gripper frame (dummy link + fixed joint) -->\n  <link name=\"gripper_frame_link\">\n    <origin xyz=\"0 0 0\" rpy=\"0 -0 0\"/>\n    <inertial>\n      <origin xyz=\"0 0 0\" rpy=\"0 0 0\"/>\n      <mass value=\"1e-9\"/>\n      <inertia ixx=\"0\" ixy=\"0\" ixz=\"0\" iyy=\"0\" iyz=\"0\" izz=\"0\"/>\n    </inertial>\n  </link>\n\n  <joint name=\"gripper_frame_joint\" type=\"fixed\">\n    <origin xyz=\"-0.0079 -0.000218121 -0.0981274\" rpy=\"0 3.14159 0\"/>\n    <parent link=\"gripper_link\"/>\n    <child link=\"gripper_frame_link\"/>\n    <axis xyz=\"0 0 0\"/>\n  </joint>\n\n  <!-- Link moving_jaw_so101_v1 -->\n  <link name=\"moving_jaw_so101_v1_link\">\n    <inertial>\n      <origin xyz=\"-0.00157495 -0.0300244 0.0192755\" rpy=\"0 0 0\"/>\n      <mass value=\"0.012\"/>\n      <inertia ixx=\"6.61427e-06\" ixy=\"-3.19807e-07\" ixz=\"-5.90717e-09\" iyy=\"1.89032e-06\" iyz=\"-1.09945e-07\" izz=\"5.28738e-06\"/>\n    </inertial>\n    <!-- Part moving_jaw_so101_v1 -->\n    <visual>\n      <origin xyz=\"-5.55112e-17 -5.55112e-17 0.0189\" rpy=\"9.53145e-17 6.93889e-18 1.24077e-24\"/>\n      <geometry>\n        <mesh filename=\"assets/moving_jaw_so101_v1.stl\"/>\n      </geometry>\n      <material name=\"3d_printed\"/>\n    </visual>\n    <collision>\n      <origin xyz=\"-5.55112e-17 -5.55112e-17 0.0189\" rpy=\"9.53145e-17 6.93889e-18 1.24077e-24\"/>\n      <geometry>\n        <mesh filename=\"assets/moving_jaw_so101_v1.stl\"/>\n      </geometry>\n    </collision>\n  </link>\n\n  <!-- Joint from gripper to moving_jaw_so101_v1 -->\n  <joint name=\"gripper\" type=\"revolute\">\n    <origin xyz=\"0.0202 0.0188 -0.0234\" rpy=\"1.5708 -5.24284e-08 -1.41553e-15\"/>\n    <parent link=\"gripper_link\"/>\n    <child link=\"moving_jaw_so101_v1_link\"/>\n    <axis xyz=\"0 0 1\"/>\n    <limit effort=\"10\" velocity=\"10\" lower=\"-0.174533\" upper=\"1.74533\"/>\n  </joint>\n\n  <transmission name=\"gripper_trans\">\n    <type>transmission_interface/SimpleTransmission</type>\n    <joint name=\"gripper\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n    </joint>\n    <actuator name=\"motor6\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n      <mechanicalReduction>1</mechanicalReduction>\n    </actuator>\n  </transmission>\n\n  <!-- Joint from wrist to gripper -->\n  <joint name=\"wrist_roll\" type=\"revolute\">\n    <origin xyz=\"5.55112e-17 -0.0611 0.0181\" rpy=\"1.5708 0.0486795 3.14159\"/>\n    <parent link=\"wrist_link\"/>\n    <child link=\"gripper_link\"/>\n    <axis xyz=\"0 0 1\"/>\n    <limit effort=\"10\" velocity=\"10\" lower=\"-2.74385\" upper=\"2.84121\"/>\n  </joint>\n\n  <transmission name=\"wrist_roll_trans\">\n    <type>transmission_interface/SimpleTransmission</type>\n    <joint name=\"wrist_roll\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n    </joint>\n    <actuator name=\"motor5\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n      <mechanicalReduction>1</mechanicalReduction>\n    </actuator>\n  </transmission>\n\n  <!-- Joint from lower_arm to wrist -->\n  <joint name=\"wrist_flex\" type=\"revolute\">\n    <origin xyz=\"-0.1349 0.0052 3.62355e-17\" rpy=\"4.02456e-15 8.67362e-16 -1.5708\"/>\n    <parent link=\"lower_arm_link\"/>\n    <child link=\"wrist_link\"/>\n    <axis xyz=\"0 0 1\"/>\n    <limit effort=\"10\" velocity=\"10\" lower=\"-1.65806\" upper=\"1.65806\"/>\n  </joint>\n\n  <transmission name=\"wrist_flex_trans\">\n    <type>transmission_interface/SimpleTransmission</type>\n    <joint name=\"wrist_flex\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n    </joint>\n    <actuator name=\"motor4\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n      <mechanicalReduction>1</mechanicalReduction>\n    </actuator>\n  </transmission>\n\n  <!-- Joint from upper_arm to lower_arm -->\n  <!-- Note: 5-degree calibration offset applied to joint limits -->\n  <joint name=\"elbow_flex\" type=\"revolute\">\n    <origin xyz=\"-0.11257 -0.028 1.73763e-16\" rpy=\"-3.63608e-16 8.74301e-16 1.5708\"/>\n    <parent link=\"upper_arm_link\"/>\n    <child link=\"lower_arm_link\"/>\n    <axis xyz=\"0 0 1\"/>\n    <limit effort=\"10\" velocity=\"10\" lower=\"-1.69\" upper=\"1.69\"/>\n  </joint>\n\n  <transmission name=\"elbow_flex_trans\">\n    <type>transmission_interface/SimpleTransmission</type>\n    <joint name=\"elbow_flex\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n    </joint>\n    <actuator name=\"motor3\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n      <mechanicalReduction>1</mechanicalReduction>\n    </actuator>\n  </transmission>\n\n  <!-- Joint from shoulder to upper_arm -->\n  <joint name=\"shoulder_lift\" type=\"revolute\">\n    <origin xyz=\"-0.0303992 -0.0182778 -0.0542\" rpy=\"-1.5708 -1.5708 0\"/>\n    <parent link=\"shoulder_link\"/>\n    <child link=\"upper_arm_link\"/>\n    <axis xyz=\"0 0 1\"/>\n    <limit effort=\"10\" velocity=\"10\" lower=\"-1.74533\" upper=\"1.74533\"/>\n  </joint>\n\n  <transmission name=\"shoulder_lift_trans\">\n    <type>transmission_interface/SimpleTransmission</type>\n    <joint name=\"shoulder_lift\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n    </joint>\n    <actuator name=\"motor2\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n      <mechanicalReduction>1</mechanicalReduction>\n    </actuator>\n  </transmission>\n\n  <!-- Joint from base to shoulder -->\n  <joint name=\"shoulder_pan\" type=\"revolute\">\n    <origin xyz=\"0.0388353 -8.97657e-09 0.0624\" rpy=\"3.14159 4.18253e-17 -3.14159\"/>\n    <parent link=\"base_link\"/>\n    <child link=\"shoulder_link\"/>\n    <axis xyz=\"0 0 1\"/>\n    <limit effort=\"10\" velocity=\"10\" lower=\"-1.91986\" upper=\"1.91986\"/>\n  </joint>\n\n  <transmission name=\"shoulder_pan_trans\">\n    <type>transmission_interface/SimpleTransmission</type>\n    <joint name=\"shoulder_pan\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n    </joint>\n    <actuator name=\"motor1\">\n      <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>\n      <mechanicalReduction>1</mechanicalReduction>\n    </actuator>\n  </transmission> \n\n</robot>",
+  "K": [
+    [
+      849.2223735989251,
+      0.0,
+      711.5993105397339
+    ],
+    [
+      0.0,
+      850.741838148004,
+      338.07518932951666
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "D": [
+    [
+      -0.46156869472661277,
+      0.24912554442975138,
+      -0.003460739272270514,
+      -0.00022460699290738587,
+      -0.0728799314007944
+    ]
+  ],
+  "samples": [
+    {
+      "image": "0000.png",
+      "timestamp": 1793749855.617929,
+      "capture_duration_s": 0.17745614051818848,
+      "joints_deg": {
+        "shoulder_pan": -19.076923076923077,
+        "shoulder_lift": -29.62637362637363,
+        "elbow_flex": 30.98901098901099,
+        "wrist_flex": 62.989010989010985,
+        "wrist_roll": -133.4065934065934
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.626373626373628,
+          "elbow_flex": 30.98901098901099,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.626373626373628,
+          "elbow_flex": 30.98901098901099,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.626373626373628,
+          "elbow_flex": 30.98901098901099,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.626373626373628,
+          "elbow_flex": 30.98901098901099,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.626373626373628,
+          "elbow_flex": 30.98901098901099,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.626373626373628,
+          "elbow_flex": 30.98901098901099,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          785.3772583007812,
+          432.9811706542969
+        ],
+        [
+          842.63671875,
+          405.0235595703125
+        ],
+        [
+          903.3320922851562,
+          375.01446533203125
+        ],
+        [
+          965.1122436523438,
+          343.7296447753906
+        ],
+        [
+          1027.334716796875,
+          310.80816650390625
+        ],
+        [
+          1087.8419189453125,
+          277.9151916503906
+        ],
+        [
+          806.044921875,
+          495.1771545410156
+        ],
+        [
+          865.083984375,
+          468.672119140625
+        ],
+        [
+          927.8828125,
+          439.84210205078125
+        ],
+        [
+          991.7998046875,
+          408.6568908691406
+        ],
+        [
+          1055.69384765625,
+          376.174072265625
+        ],
+        [
+          1118.0128173828125,
+          342.64019775390625
+        ],
+        [
+          826.9387817382812,
+          558.4337768554688
+        ],
+        [
+          887.8912353515625,
+          533.904541015625
+        ],
+        [
+          952.0482177734375,
+          506.04620361328125
+        ],
+        [
+          1017.3583374023438,
+          476.1750793457031
+        ],
+        [
+          1082.876220703125,
+          443.4669189453125
+        ],
+        [
+          1146.2122802734375,
+          409.8881530761719
+        ],
+        [
+          847.2660522460938,
+          621.8934326171875
+        ],
+        [
+          909.8714599609375,
+          599.0535888671875
+        ],
+        [
+          974.879638671875,
+          573.0624389648438
+        ],
+        [
+          1041.3734130859375,
+          543.805908203125
+        ],
+        [
+          1107.87841796875,
+          512.12548828125
+        ],
+        [
+          1171.9898681640625,
+          478.0883483886719
+        ]
+      ],
+      "pnp_rms_px": 0.7624118328094482,
+      "T_base_gripper": [
+        [
+          -0.3886222522397195,
+          0.8256074027481854,
+          -0.4090784296336383,
+          0.19060007654204575
+        ],
+        [
+          -0.8668219330347808,
+          -0.4781243815111639,
+          -0.1414807839051395,
+          0.052297335661941974
+        ],
+        [
+          -0.312397953696841,
+          0.2996155742480065,
+          0.901464378771598,
+          0.1752060406626948
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.7997172823779042,
+          0.281382653991827,
+          0.530354664633597,
+          -0.0002210831328930747
+        ],
+        [
+          -0.43926084182499076,
+          0.8764094538818892,
+          0.1973737114857219,
+          0.02377780188923541
+        ],
+        [
+          -0.4092703032291737,
+          -0.39080720461496654,
+          0.8244801681761277,
+          0.3281322632218132
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0001.png",
+      "timestamp": 1793749859.079798,
+      "capture_duration_s": 0.1795940399169922,
+      "joints_deg": {
+        "shoulder_pan": -19.047619047619047,
+        "shoulder_lift": -29.01098901098901,
+        "elbow_flex": 22.461538461538456,
+        "wrist_flex": 63.340659340659336,
+        "wrist_roll": -133.3186813186813
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -18.98901098901099,
+          "shoulder_lift": -29.01098901098901,
+          "elbow_flex": 22.46153846153846,
+          "wrist_flex": 63.34065934065934,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -18.98901098901099,
+          "shoulder_lift": -29.01098901098901,
+          "elbow_flex": 22.46153846153846,
+          "wrist_flex": 63.34065934065934,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.01098901098901,
+          "elbow_flex": 22.46153846153846,
+          "wrist_flex": 63.34065934065934,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.01098901098901,
+          "elbow_flex": 22.46153846153846,
+          "wrist_flex": 63.34065934065934,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.01098901098901,
+          "elbow_flex": 22.46153846153846,
+          "wrist_flex": 63.34065934065934,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -29.01098901098901,
+          "elbow_flex": 22.46153846153846,
+          "wrist_flex": 63.34065934065934,
+          "wrist_roll": -133.3186813186813
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          804.7727661132812,
+          446.0967102050781
+        ],
+        [
+          862.1452026367188,
+          419.72088623046875
+        ],
+        [
+          922.879638671875,
+          391.15179443359375
+        ],
+        [
+          984.1224365234375,
+          361.6377868652344
+        ],
+        [
+          1045.41552734375,
+          330.6978759765625
+        ],
+        [
+          1104.728759765625,
+          299.7024841308594
+        ],
+        [
+          824.6204223632812,
+          507.6390075683594
+        ],
+        [
+          883.9351806640625,
+          482.5345153808594
+        ],
+        [
+          946.0377197265625,
+          455.26324462890625
+        ],
+        [
+          1009.1417236328125,
+          425.7814636230469
+        ],
+        [
+          1072.04541015625,
+          395.0943603515625
+        ],
+        [
+          1132.795654296875,
+          363.2695617675781
+        ],
+        [
+          844.4896240234375,
+          570.1539916992188
+        ],
+        [
+          905.2516479492188,
+          546.7735595703125
+        ],
+        [
+          968.7515869140625,
+          520.2698364257812
+        ],
+        [
+          1033.0255126953125,
+          491.760986328125
+        ],
+        [
+          1097.106689453125,
+          460.88677978515625
+        ],
+        [
+          1158.695068359375,
+          429.1429748535156
+        ],
+        [
+          863.7584838867188,
+          632.056640625
+        ],
+        [
+          925.721923828125,
+          610.1935424804688
+        ],
+        [
+          989.9131469726562,
+          585.490966796875
+        ],
+        [
+          1055.0194091796875,
+          557.6764526367188
+        ],
+        [
+          1119.7513427734375,
+          527.5888671875
+        ],
+        [
+          1181.9661865234375,
+          495.3387145996094
+        ]
+      ],
+      "pnp_rms_px": 0.7812702655792236,
+      "T_base_gripper": [
+        [
+          -0.34366563501844677,
+          0.7835007101189465,
+          -0.5177070296513981,
+          0.196921612388845
+        ],
+        [
+          -0.8521184994179691,
+          -0.4918757767711921,
+          -0.17875201586389156,
+          0.05439302222502653
+        ],
+        [
+          -0.39469987871424045,
+          0.3797168122019919,
+          0.8366762505737334,
+          0.1980566804369827
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.8108893373326932,
+          0.27119689726689405,
+          0.5185660281130604,
+          0.0073432968945139915
+        ],
+        [
+          -0.4263992367080381,
+          0.8807257354458212,
+          0.20616951728667327,
+          0.02869477420550721
+        ],
+        [
+          -0.4008019130879345,
+          -0.3882968218209197,
+          0.8298092579797027,
+          0.3307483302066242
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0002.png",
+      "timestamp": 1793749874.689169,
+      "capture_duration_s": 0.18222522735595703,
+      "joints_deg": {
+        "shoulder_pan": -19.252747252747252,
+        "shoulder_lift": -9.31868131868132,
+        "elbow_flex": 22.02197802197802,
+        "wrist_flex": 62.989010989010985,
+        "wrist_roll": -133.4065934065934
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -19.252747252747252,
+          "shoulder_lift": -9.31868131868132,
+          "elbow_flex": 22.021978021978022,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.252747252747252,
+          "shoulder_lift": -9.31868131868132,
+          "elbow_flex": 22.021978021978022,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.252747252747252,
+          "shoulder_lift": -9.31868131868132,
+          "elbow_flex": 22.021978021978022,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.252747252747252,
+          "shoulder_lift": -9.31868131868132,
+          "elbow_flex": 22.021978021978022,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.252747252747252,
+          "shoulder_lift": -9.31868131868132,
+          "elbow_flex": 22.021978021978022,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.252747252747252,
+          "shoulder_lift": -9.31868131868132,
+          "elbow_flex": 22.021978021978022,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          679.0287475585938,
+          352.343994140625
+        ],
+        [
+          752.9923095703125,
+          316.941162109375
+        ],
+        [
+          832.9920043945312,
+          278.9425354003906
+        ],
+        [
+          914.9816284179688,
+          240.06837463378906
+        ],
+        [
+          997.1168212890625,
+          200.6720733642578
+        ],
+        [
+          1075.3343505859375,
+          163.16737365722656
+        ],
+        [
+          710.9110717773438,
+          433.047607421875
+        ],
+        [
+          787.0516967773438,
+          400.5454406738281
+        ],
+        [
+          869.0113525390625,
+          364.5389404296875
+        ],
+        [
+          953.1112060546875,
+          326.0623779296875
+        ],
+        [
+          1036.77880859375,
+          287.00885009765625
+        ],
+        [
+          1115.934326171875,
+          248.29888916015625
+        ],
+        [
+          743.1751708984375,
+          513.4522094726562
+        ],
+        [
+          820.9508666992188,
+          484.1593017578125
+        ],
+        [
+          903.8258666992188,
+          450.5574035644531
+        ],
+        [
+          988.8893432617188,
+          414.0617370605469
+        ],
+        [
+          1072.84326171875,
+          375.14697265625
+        ],
+        [
+          1152.117919921875,
+          335.99200439453125
+        ],
+        [
+          774.8742065429688,
+          591.6334838867188
+        ],
+        [
+          853.3292846679688,
+          565.2752075195312
+        ],
+        [
+          936.264892578125,
+          535.0327758789062
+        ],
+        [
+          1020.9381713867188,
+          500.0374755859375
+        ],
+        [
+          1104.1217041015625,
+          462.44989013671875
+        ],
+        [
+          1182.8380126953125,
+          423.1859130859375
+        ]
+      ],
+      "pnp_rms_px": 0.8175466060638428,
+      "T_base_gripper": [
+        [
+          -0.43196261552181336,
+          0.8711909769679411,
+          -0.23331219522604976,
+          0.21604176540924594
+        ],
+        [
+          -0.8840782694724767,
+          -0.46017807819877893,
+          -0.08149693118043812,
+          0.061705370357419353
+        ],
+        [
+          -0.17836454871443697,
+          0.17106261425256752,
+          0.9689807375623994,
+          0.14842163496176825
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.8405688277212161,
+          0.3667288009792214,
+          0.39869039666854694,
+          -0.03955102756291208
+        ],
+        [
+          -0.4007918301317274,
+          0.9161663145226497,
+          0.0022788228640948094,
+          -0.008786538050044175
+        ],
+        [
+          -0.3644310013748024,
+          -0.1617073612001877,
+          0.9170827523024467,
+          0.25671270682387104
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0003.png",
+      "timestamp": 1793749881.090162,
+      "capture_duration_s": 0.1824491024017334,
+      "joints_deg": {
+        "shoulder_pan": -19.076923076923077,
+        "shoulder_lift": -2.4615384615384617,
+        "elbow_flex": 16.747252747252748,
+        "wrist_flex": 62.989010989010985,
+        "wrist_roll": -133.4065934065934
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -2.4615384615384617,
+          "elbow_flex": 16.747252747252748,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -2.4615384615384617,
+          "elbow_flex": 16.747252747252748,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -2.4615384615384617,
+          "elbow_flex": 16.747252747252748,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -2.4615384615384617,
+          "elbow_flex": 16.747252747252748,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -2.4615384615384617,
+          "elbow_flex": 16.747252747252748,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        },
+        {
+          "shoulder_pan": -19.076923076923077,
+          "shoulder_lift": -2.4615384615384617,
+          "elbow_flex": 16.747252747252748,
+          "wrist_flex": 62.989010989010985,
+          "wrist_roll": -133.4065934065934
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          713.11767578125,
+          436.2628173828125
+        ],
+        [
+          784.1727905273438,
+          402.8037414550781
+        ],
+        [
+          860.9520263671875,
+          365.7523193359375
+        ],
+        [
+          939.4110107421875,
+          326.8616638183594
+        ],
+        [
+          1018.1109619140625,
+          286.2168884277344
+        ],
+        [
+          1093.4556884765625,
+          246.61097717285156
+        ],
+        [
+          744.89404296875,
+          512.7528686523438
+        ],
+        [
+          817.7283325195312,
+          481.85308837890625
+        ],
+        [
+          895.8799438476562,
+          447.17645263671875
+        ],
+        [
+          976.0259399414062,
+          409.1929626464844
+        ],
+        [
+          1055.9215087890625,
+          369.4311218261719
+        ],
+        [
+          1132.0230712890625,
+          328.97528076171875
+        ],
+        [
+          776.4843139648438,
+          587.562744140625
+        ],
+        [
+          850.6845703125,
+          560.0656127929688
+        ],
+        [
+          929.318115234375,
+          527.7555541992188
+        ],
+        [
+          1009.89013671875,
+          491.5907287597656
+        ],
+        [
+          1089.812744140625,
+          452.41375732421875
+        ],
+        [
+          1165.4608154296875,
+          411.998779296875
+        ],
+        [
+          806.9793701171875,
+          659.2330322265625
+        ],
+        [
+          881.5595703125,
+          634.4829711914062
+        ],
+        [
+          959.853759765625,
+          605.0714111328125
+        ],
+        [
+          1039.9310302734375,
+          570.6730346679688
+        ],
+        [
+          1119.07373046875,
+          532.822509765625
+        ],
+        [
+          1193.8590087890625,
+          492.5410461425781
+        ]
+      ],
+      "pnp_rms_px": 0.8782780170440674,
+      "T_base_gripper": [
+        [
+          -0.4390764499141646,
+          0.8739974473233019,
+          -0.20818341241109045,
+          0.22697251140394908
+        ],
+        [
+          -0.8842712750100457,
+          -0.4613889169636165,
+          -0.07200402416010318,
+          0.06487636111451053
+        ],
+        [
+          -0.15898485249507854,
+          0.1524753402209454,
+          0.9754358447902273,
+          0.14242139989441466
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.8218171515319141,
+          0.37826449926900446,
+          0.42606635403507265,
+          -0.029605207593993217
+        ],
+        [
+          -0.43219338531163926,
+          0.9011553797802703,
+          0.033583614843276266,
+          0.017454239837183236
+        ],
+        [
+          -0.371248497829736,
+          -0.21174265060645173,
+          0.9040683617809653,
+          0.26531384097510635
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0004.png",
+      "timestamp": 1793749887.7889569,
+      "capture_duration_s": 0.1831190586090088,
+      "joints_deg": {
+        "shoulder_pan": -18.9010989010989,
+        "shoulder_lift": -25.23076923076923,
+        "elbow_flex": 38.285714285714285,
+        "wrist_flex": 48.48351648351649,
+        "wrist_roll": -133.3186813186813
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -18.9010989010989,
+          "shoulder_lift": -25.23076923076923,
+          "elbow_flex": 38.285714285714285,
+          "wrist_flex": 48.48351648351648,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -18.9010989010989,
+          "shoulder_lift": -25.23076923076923,
+          "elbow_flex": 38.285714285714285,
+          "wrist_flex": 48.48351648351648,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -18.9010989010989,
+          "shoulder_lift": -25.23076923076923,
+          "elbow_flex": 38.285714285714285,
+          "wrist_flex": 48.48351648351648,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -18.9010989010989,
+          "shoulder_lift": -25.23076923076923,
+          "elbow_flex": 38.285714285714285,
+          "wrist_flex": 48.48351648351648,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -18.9010989010989,
+          "shoulder_lift": -25.23076923076923,
+          "elbow_flex": 38.285714285714285,
+          "wrist_flex": 48.48351648351648,
+          "wrist_roll": -133.3186813186813
+        },
+        {
+          "shoulder_pan": -18.9010989010989,
+          "shoulder_lift": -25.23076923076923,
+          "elbow_flex": 38.285714285714285,
+          "wrist_flex": 48.48351648351648,
+          "wrist_roll": -133.3186813186813
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          680.0220336914062,
+          420.0032043457031
+        ],
+        [
+          746.0402221679688,
+          385.8948974609375
+        ],
+        [
+          818.2659301757812,
+          348.7425231933594
+        ],
+        [
+          893.4334716796875,
+          309.1957092285156
+        ],
+        [
+          970.1190185546875,
+          267.84930419921875
+        ],
+        [
+          1045.0338134765625,
+          226.71714782714844
+        ],
+        [
+          707.2872924804688,
+          494.3187561035156
+        ],
+        [
+          775.926025390625,
+          462.8452453613281
+        ],
+        [
+          850.7364501953125,
+          427.5267333984375
+        ],
+        [
+          928.804931640625,
+          388.7659912109375
+        ],
+        [
+          1008.1853637695312,
+          348.00042724609375
+        ],
+        [
+          1085.1826171875,
+          306.05157470703125
+        ],
+        [
+          735.5048828125,
+          569.2872314453125
+        ],
+        [
+          806.6051025390625,
+          540.990966796875
+        ],
+        [
+          883.1943969726562,
+          508.0188903808594
+        ],
+        [
+          963.4710693359375,
+          471.2314758300781
+        ],
+        [
+          1044.74365234375,
+          430.9588928222656
+        ],
+        [
+          1122.918212890625,
+          389.0096130371094
+        ],
+        [
+          763.9977416992188,
+          643.3750610351562
+        ],
+        [
+          836.6788940429688,
+          618.1431884765625
+        ],
+        [
+          914.3416137695312,
+          588.3804321289062
+        ],
+        [
+          995.6707763671875,
+          553.266357421875
+        ],
+        [
+          1077.548828125,
+          514.455322265625
+        ],
+        [
+          1156.463623046875,
+          472.3241882324219
+        ]
+      ],
+      "pnp_rms_px": 0.9026126861572266,
+      "T_base_gripper": [
+        [
+          -0.3747906432480928,
+          0.8100887187015915,
+          -0.45087497331976,
+          0.19920504374587814
+        ],
+        [
+          -0.8611486213302221,
+          -0.48434221068587124,
+          -0.15438806601865673,
+          0.05472310894745219
+        ],
+        [
+          -0.34344581190449613,
+          0.3304071590936506,
+          0.8791337119602024,
+          0.1512446030537602
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.811746523667728,
+          0.34084102509907593,
+          0.4742309320602882,
+          -0.03872653228372232
+        ],
+        [
+          -0.4461739413868035,
+          0.8858874560490543,
+          0.12701271291607094,
+          0.014188615080506376
+        ],
+        [
+          -0.3768240907117324,
+          -0.314691612256104,
+          0.8711904463634401,
+          0.2776403637133834
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0005.png",
+      "timestamp": 1793749898.482084,
+      "capture_duration_s": 0.17954802513122559,
+      "joints_deg": {
+        "shoulder_pan": -12.659340659340659,
+        "shoulder_lift": -1.054945054945055,
+        "elbow_flex": -11.736263736263735,
+        "wrist_flex": 85.31868131868133,
+        "wrist_roll": -166.15384615384613
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -1.054945054945055,
+          "elbow_flex": -11.736263736263735,
+          "wrist_flex": 85.31868131868131,
+          "wrist_roll": -166.1098901098901
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -1.054945054945055,
+          "elbow_flex": -11.736263736263735,
+          "wrist_flex": 85.31868131868131,
+          "wrist_roll": -166.1098901098901
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -1.054945054945055,
+          "elbow_flex": -11.736263736263735,
+          "wrist_flex": 85.31868131868131,
+          "wrist_roll": -166.1098901098901
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -1.054945054945055,
+          "elbow_flex": -11.736263736263735,
+          "wrist_flex": 85.31868131868131,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -1.054945054945055,
+          "elbow_flex": -11.736263736263735,
+          "wrist_flex": 85.31868131868131,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -1.054945054945055,
+          "elbow_flex": -11.736263736263735,
+          "wrist_flex": 85.31868131868131,
+          "wrist_roll": -166.1978021978022
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          842.8130493164062,
+          393.9047546386719
+        ],
+        [
+          872.5177001953125,
+          340.7603454589844
+        ],
+        [
+          904.5559692382812,
+          282.9336853027344
+        ],
+        [
+          937.0361938476562,
+          222.0972137451172
+        ],
+        [
+          969.6810913085938,
+          158.873046875
+        ],
+        [
+          1000.8268432617188,
+          94.7622299194336
+        ],
+        [
+          895.66650390625,
+          432.5837097167969
+        ],
+        [
+          928.2006225585938,
+          380.14959716796875
+        ],
+        [
+          962.578125,
+          322.7386169433594
+        ],
+        [
+          997.3587036132812,
+          261.8826904296875
+        ],
+        [
+          1031.9134521484375,
+          198.13766479492188
+        ],
+        [
+          1064.8597412109375,
+          133.4905548095703
+        ],
+        [
+          948.9197387695312,
+          471.5823059082031
+        ],
+        [
+          984.029541015625,
+          420.0509338378906
+        ],
+        [
+          1020.4796752929688,
+          363.7820129394531
+        ],
+        [
+          1057.4139404296875,
+          303.03729248046875
+        ],
+        [
+          1093.576904296875,
+          239.72817993164062
+        ],
+        [
+          1127.8046875,
+          174.77532958984375
+        ],
+        [
+          1000.9909057617188,
+          510.1673278808594
+        ],
+        [
+          1038.5777587890625,
+          459.9566955566406
+        ],
+        [
+          1077.0064697265625,
+          404.9714660644531
+        ],
+        [
+          1115.6336669921875,
+          345.57476806640625
+        ],
+        [
+          1153.1820068359375,
+          282.6389465332031
+        ],
+        [
+          1188.3486328125,
+          218.20115661621094
+        ]
+      ],
+      "pnp_rms_px": 0.8051974177360535,
+      "T_base_gripper": [
+        [
+          -0.8713615105744734,
+          0.39358209072584693,
+          -0.29295435779186285,
+          0.23895664632042732
+        ],
+        [
+          -0.3922897205284428,
+          -0.9174845105504114,
+          -0.06580993897420304,
+          0.04476868501889393
+        ],
+        [
+          -0.2946826989442846,
+          0.057578735310383856,
+          0.9538588974177304,
+          0.20632346755237474
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.36419376608688514,
+          0.7578745710915415,
+          0.541284615739504,
+          0.020006848870225413
+        ],
+        [
+          -0.7958135479772144,
+          0.5551517723595201,
+          -0.24184149044777467,
+          0.02679381697716612
+        ],
+        [
+          -0.483780629623974,
+          -0.3426844673148973,
+          0.8053096660674921,
+          0.3291251861523693
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0006.png",
+      "timestamp": 1793749903.729207,
+      "capture_duration_s": 0.2130420207977295,
+      "joints_deg": {
+        "shoulder_pan": -12.659340659340659,
+        "shoulder_lift": -11.120879120879122,
+        "elbow_flex": -11.648351648351648,
+        "wrist_flex": 94.54945054945055,
+        "wrist_roll": -166.28571428571425
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -11.076923076923077,
+          "elbow_flex": -11.648351648351648,
+          "wrist_flex": 94.54945054945055,
+          "wrist_roll": -166.28571428571428
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -11.076923076923077,
+          "elbow_flex": -11.648351648351648,
+          "wrist_flex": 94.54945054945055,
+          "wrist_roll": -166.28571428571428
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -11.076923076923077,
+          "elbow_flex": -11.648351648351648,
+          "wrist_flex": 94.54945054945055,
+          "wrist_roll": -166.28571428571428
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -11.164835164835164,
+          "elbow_flex": -11.648351648351648,
+          "wrist_flex": 94.54945054945055,
+          "wrist_roll": -166.28571428571428
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -11.164835164835164,
+          "elbow_flex": -11.648351648351648,
+          "wrist_flex": 94.54945054945055,
+          "wrist_roll": -166.28571428571428
+        },
+        {
+          "shoulder_pan": -12.659340659340659,
+          "shoulder_lift": -11.164835164835164,
+          "elbow_flex": -11.648351648351648,
+          "wrist_flex": 94.54945054945055,
+          "wrist_roll": -166.28571428571428
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          795.5701293945312,
+          342.3477783203125
+        ],
+        [
+          820.9776611328125,
+          291.253173828125
+        ],
+        [
+          848.4117431640625,
+          236.50735473632812
+        ],
+        [
+          876.5905151367188,
+          179.22940063476562
+        ],
+        [
+          904.9120483398438,
+          120.694091796875
+        ],
+        [
+          932.73681640625,
+          61.31733703613281
+        ],
+        [
+          844.8494262695312,
+          377.7424011230469
+        ],
+        [
+          872.8084716796875,
+          326.9322509765625
+        ],
+        [
+          902.287109375,
+          271.89111328125
+        ],
+        [
+          932.4277954101562,
+          214.40484619140625
+        ],
+        [
+          962.6566162109375,
+          154.7262420654297
+        ],
+        [
+          991.9489135742188,
+          94.68756103515625
+        ],
+        [
+          895.3331298828125,
+          414.00262451171875
+        ],
+        [
+          925.6226196289062,
+          363.4532165527344
+        ],
+        [
+          957.1397705078125,
+          309.0155944824219
+        ],
+        [
+          989.34423828125,
+          251.3533477783203
+        ],
+        [
+          1021.1202392578125,
+          191.49705505371094
+        ],
+        [
+          1051.8116455078125,
+          130.6682586669922
+        ],
+        [
+          945.6736450195312,
+          450.6990051269531
+        ],
+        [
+          978.3720703125,
+          400.95489501953125
+        ],
+        [
+          1011.877685546875,
+          347.135498046875
+        ],
+        [
+          1045.837890625,
+          290.05615234375
+        ],
+        [
+          1079.2005615234375,
+          230.1063690185547
+        ],
+        [
+          1110.874267578125,
+          169.19908142089844
+        ]
+      ],
+      "pnp_rms_px": 0.46498316526412964,
+      "T_base_gripper": [
+        [
+          -0.8684359480297814,
+          0.39083651665058117,
+          -0.3050669130241013,
+          0.21219497600226428
+        ],
+        [
+          -0.38931693540237744,
+          -0.9185509634141951,
+          -0.0685306604357152,
+          0.03875739012687107
+        ],
+        [
+          -0.3070037914725415,
+          0.05925322660660938,
+          0.94986195163202,
+          0.2314241620554477
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.363617135361256,
+          0.7547301767841106,
+          0.5460448142076797,
+          0.005224831226906763
+        ],
+        [
+          -0.7997520114148868,
+          0.5534952423387971,
+          -0.23246448534380285,
+          0.007995293965714368
+        ],
+        [
+          -0.47768116888727863,
+          -0.3521723682513177,
+          0.8048573314139231,
+          0.3574425332018497
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0007.png",
+      "timestamp": 1793749910.659337,
+      "capture_duration_s": 0.17857599258422852,
+      "joints_deg": {
+        "shoulder_pan": -12.395604395604396,
+        "shoulder_lift": -6.065934065934066,
+        "elbow_flex": -12.43956043956044,
+        "wrist_flex": 94.1978021978022,
+        "wrist_roll": -166.1978021978022
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -12.395604395604396,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -12.43956043956044,
+          "wrist_flex": 94.1978021978022,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -12.395604395604396,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -12.43956043956044,
+          "wrist_flex": 94.1978021978022,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -12.395604395604396,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -12.43956043956044,
+          "wrist_flex": 94.1978021978022,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -12.395604395604396,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -12.43956043956044,
+          "wrist_flex": 94.1978021978022,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -12.395604395604396,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -12.43956043956044,
+          "wrist_flex": 94.1978021978022,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -12.395604395604396,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -12.43956043956044,
+          "wrist_flex": 94.1978021978022,
+          "wrist_roll": -166.1978021978022
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          756.9969482421875,
+          398.1141357421875
+        ],
+        [
+          781.1131591796875,
+          344.3400573730469
+        ],
+        [
+          807.7448120117188,
+          285.4992980957031
+        ],
+        [
+          835.2630004882812,
+          223.40875244140625
+        ],
+        [
+          863.4153442382812,
+          158.6652374267578
+        ],
+        [
+          891.2401733398438,
+          92.59793853759766
+        ],
+        [
+          811.8560791015625,
+          432.7634582519531
+        ],
+        [
+          838.911376953125,
+          379.4228820800781
+        ],
+        [
+          868.0320434570312,
+          320.8699951171875
+        ],
+        [
+          897.9772338867188,
+          258.4973449707031
+        ],
+        [
+          928.3311767578125,
+          192.89256286621094
+        ],
+        [
+          957.960205078125,
+          126.01083374023438
+        ],
+        [
+          867.7993774414062,
+          467.6876220703125
+        ],
+        [
+          897.5221557617188,
+          414.9566345214844
+        ],
+        [
+          929.0670166015625,
+          357.1318664550781
+        ],
+        [
+          961.4087524414062,
+          294.8659362792969
+        ],
+        [
+          993.796875,
+          229.35731506347656
+        ],
+        [
+          1025.0380859375,
+          161.9951934814453
+        ],
+        [
+          923.3472290039062,
+          502.3283386230469
+        ],
+        [
+          955.97998046875,
+          450.70440673828125
+        ],
+        [
+          989.7232055664062,
+          393.991943359375
+        ],
+        [
+          1024.16259765625,
+          332.6965637207031
+        ],
+        [
+          1058.2879638671875,
+          267.4061584472656
+        ],
+        [
+          1090.8992919921875,
+          200.47402954101562
+        ]
+      ],
+      "pnp_rms_px": 0.5177373886108398,
+      "T_base_gripper": [
+        [
+          -0.8879538492166033,
+          0.39150595777145214,
+          -0.24137325181319366,
+          0.22221768675921677
+        ],
+        [
+          -0.3907558002418905,
+          -0.9189639640838628,
+          -0.05305786739582003,
+          0.04012311486209086
+        ],
+        [
+          -0.24258579150217624,
+          0.04720506058390936,
+          0.9689808130280654,
+          0.22004173153944578
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.3362538945803837,
+          0.8103287356630516,
+          0.4798965081538359,
+          -0.011791497492079934
+        ],
+        [
+          -0.8250301814518585,
+          0.49919131391469695,
+          -0.2648267958602983,
+          0.030926785296619123
+        ],
+        [
+          -0.45415693110756095,
+          -0.306880061703003,
+          0.8364006872642582,
+          0.3372802168465723
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0008.png",
+      "timestamp": 1793749912.375644,
+      "capture_duration_s": 0.17928099632263184,
+      "joints_deg": {
+        "shoulder_pan": -12.747252747252746,
+        "shoulder_lift": -0.21978021978021978,
+        "elbow_flex": -12.996336996336995,
+        "wrist_flex": 94.02197802197803,
+        "wrist_roll": -166.37362637362637
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -12.747252747252746,
+          "shoulder_lift": -0.26373626373626374,
+          "elbow_flex": -12.967032967032967,
+          "wrist_flex": 94.02197802197803,
+          "wrist_roll": -166.37362637362637
+        },
+        {
+          "shoulder_pan": -12.747252747252746,
+          "shoulder_lift": -0.26373626373626374,
+          "elbow_flex": -12.967032967032967,
+          "wrist_flex": 94.02197802197803,
+          "wrist_roll": -166.37362637362637
+        },
+        {
+          "shoulder_pan": -12.747252747252746,
+          "shoulder_lift": -0.26373626373626374,
+          "elbow_flex": -12.967032967032967,
+          "wrist_flex": 94.02197802197803,
+          "wrist_roll": -166.37362637362637
+        },
+        {
+          "shoulder_pan": -12.747252747252746,
+          "shoulder_lift": -0.26373626373626374,
+          "elbow_flex": -12.967032967032967,
+          "wrist_flex": 94.02197802197803,
+          "wrist_roll": -166.37362637362637
+        },
+        {
+          "shoulder_pan": -12.747252747252746,
+          "shoulder_lift": -0.17582417582417584,
+          "elbow_flex": -13.054945054945055,
+          "wrist_flex": 94.02197802197803,
+          "wrist_roll": -166.37362637362637
+        },
+        {
+          "shoulder_pan": -12.747252747252746,
+          "shoulder_lift": -0.08791208791208792,
+          "elbow_flex": -13.054945054945055,
+          "wrist_flex": 94.02197802197803,
+          "wrist_roll": -166.37362637362637
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          779.3065185546875,
+          379.3212890625
+        ],
+        [
+          807.8380737304688,
+          323.46527099609375
+        ],
+        [
+          838.834716796875,
+          262.23193359375
+        ],
+        [
+          870.7326049804688,
+          197.930419921875
+        ],
+        [
+          902.9755249023438,
+          131.27223205566406
+        ],
+        [
+          934.2279052734375,
+          64.15818786621094
+        ],
+        [
+          836.1259765625,
+          417.859619140625
+        ],
+        [
+          867.7510375976562,
+          362.4459533691406
+        ],
+        [
+          901.36328125,
+          301.8142395019531
+        ],
+        [
+          935.6920166015625,
+          237.4669952392578
+        ],
+        [
+          970.010009765625,
+          170.12380981445312
+        ],
+        [
+          1002.9576416015625,
+          102.32994842529297
+        ],
+        [
+          893.71240234375,
+          456.56378173828125
+        ],
+        [
+          928.060302734375,
+          402.129638671875
+        ],
+        [
+          963.9898071289062,
+          342.4801330566406
+        ],
+        [
+          1000.5509033203125,
+          278.3495788574219
+        ],
+        [
+          1036.709228515625,
+          211.53414916992188
+        ],
+        [
+          1071.15771484375,
+          143.3196258544922
+        ],
+        [
+          950.1913452148438,
+          494.87213134765625
+        ],
+        [
+          987.1907958984375,
+          441.76361083984375
+        ],
+        [
+          1025.3118896484375,
+          383.5301208496094
+        ],
+        [
+          1063.793212890625,
+          320.7900390625
+        ],
+        [
+          1101.547119140625,
+          254.37261962890625
+        ],
+        [
+          1136.9957275390625,
+          186.86436462402344
+        ]
+      ],
+      "pnp_rms_px": 0.42094600200653076,
+      "T_base_gripper": [
+        [
+          -0.9041601560828225,
+          0.3977512080717822,
+          -0.15584732474355742,
+          0.2318651901957902
+        ],
+        [
+          -0.3973218893854762,
+          -0.917001500323786,
+          -0.03526421159023352,
+          0.043486964527163274
+        ],
+        [
+          -0.15693861337300485,
+          0.030037058467218908,
+          0.9871514811573728,
+          0.20486555601725617
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.36412995848713275,
+          0.7930089129069363,
+          0.48841195458579634,
+          -0.004821903747049918
+        ],
+        [
+          -0.8024965434361037,
+          0.5332902387535163,
+          -0.2675832936177505,
+          0.021660185336172883
+        ],
+        [
+          -0.4726612646550008,
+          -0.294513811731091,
+          0.8305738640207496,
+          0.32147233463793956
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0009.png",
+      "timestamp": 1793749918.4136162,
+      "capture_duration_s": 0.18012380599975586,
+      "joints_deg": {
+        "shoulder_pan": -17.58241758241758,
+        "shoulder_lift": -6.065934065934066,
+        "elbow_flex": -13.14285714285714,
+        "wrist_flex": 93.93406593406593,
+        "wrist_roll": -166.1978021978022
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -17.582417582417584,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -13.142857142857142,
+          "wrist_flex": 93.93406593406593,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -17.582417582417584,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -13.142857142857142,
+          "wrist_flex": 93.93406593406593,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -17.582417582417584,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -13.142857142857142,
+          "wrist_flex": 93.93406593406593,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -17.582417582417584,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -13.142857142857142,
+          "wrist_flex": 93.93406593406593,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -17.582417582417584,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -13.142857142857142,
+          "wrist_flex": 93.93406593406593,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -17.582417582417584,
+          "shoulder_lift": -6.065934065934066,
+          "elbow_flex": -13.142857142857142,
+          "wrist_flex": 93.93406593406593,
+          "wrist_roll": -166.1978021978022
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          879.5896606445312,
+          364.3211975097656
+        ],
+        [
+          908.0609741210938,
+          314.2604675292969
+        ],
+        [
+          938.3944091796875,
+          260.4713439941406
+        ],
+        [
+          968.919921875,
+          204.27352905273438
+        ],
+        [
+          999.1598510742188,
+          146.59170532226562
+        ],
+        [
+          1028.2144775390625,
+          88.26323699951172
+        ],
+        [
+          927.0977172851562,
+          402.06927490234375
+        ],
+        [
+          958.123291015625,
+          352.4137268066406
+        ],
+        [
+          990.4305419921875,
+          298.5641174316406
+        ],
+        [
+          1022.9807739257812,
+          242.2972869873047
+        ],
+        [
+          1055.0107421875,
+          183.87596130371094
+        ],
+        [
+          1085.5164794921875,
+          124.88687133789062
+        ],
+        [
+          975.300537109375,
+          440.607666015625
+        ],
+        [
+          1008.4866943359375,
+          391.37164306640625
+        ],
+        [
+          1042.72802734375,
+          338.3692932128906
+        ],
+        [
+          1077.0369873046875,
+          282.01239013671875
+        ],
+        [
+          1110.6251220703125,
+          223.71788024902344
+        ],
+        [
+          1142.181884765625,
+          164.17076110839844
+        ],
+        [
+          1022.427490234375,
+          479.08685302734375
+        ],
+        [
+          1057.9573974609375,
+          430.95672607421875
+        ],
+        [
+          1093.945556640625,
+          378.9598388671875
+        ],
+        [
+          1129.8048095703125,
+          323.20660400390625
+        ],
+        [
+          1164.6075439453125,
+          264.90789794921875
+        ],
+        [
+          1197.063232421875,
+          205.51925659179688
+        ]
+      ],
+      "pnp_rms_px": 0.5877533555030823,
+      "T_base_gripper": [
+        [
+          -0.8449601863525815,
+          0.47219562389715497,
+          -0.2511445325930618,
+          0.21822217927209436
+        ],
+        [
+          -0.4681520311690982,
+          -0.8800562117147788,
+          -0.07959107949060748,
+          0.056658473930836416
+        ],
+        [
+          -0.25860386538344443,
+          0.05032252969206893,
+          0.9646718010878781,
+          0.22185141012243
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.3662345119924838,
+          0.7086474056230765,
+          0.6030681028949468,
+          0.038978902073649624
+        ],
+        [
+          -0.7869759763397335,
+          0.5817088856247721,
+          -0.20562972802906967,
+          0.015661654340221563
+        ],
+        [
+          -0.4965290473776439,
+          -0.3992914059792281,
+          0.7707303537693198,
+          0.3505270811872746
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0010.png",
+      "timestamp": 1793749927.5231428,
+      "capture_duration_s": 0.2135910987854004,
+      "joints_deg": {
+        "shoulder_pan": -10.54945054945055,
+        "shoulder_lift": -34.37362637362637,
+        "elbow_flex": 35.38461538461539,
+        "wrist_flex": 66.15384615384617,
+        "wrist_roll": -165.93406593406596
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -10.54945054945055,
+          "shoulder_lift": -34.37362637362637,
+          "elbow_flex": 35.38461538461539,
+          "wrist_flex": 66.15384615384616,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.54945054945055,
+          "shoulder_lift": -34.37362637362637,
+          "elbow_flex": 35.38461538461539,
+          "wrist_flex": 66.15384615384616,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.54945054945055,
+          "shoulder_lift": -34.37362637362637,
+          "elbow_flex": 35.38461538461539,
+          "wrist_flex": 66.15384615384616,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.54945054945055,
+          "shoulder_lift": -34.37362637362637,
+          "elbow_flex": 35.38461538461539,
+          "wrist_flex": 66.15384615384616,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.54945054945055,
+          "shoulder_lift": -34.37362637362637,
+          "elbow_flex": 35.38461538461539,
+          "wrist_flex": 66.15384615384616,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.54945054945055,
+          "shoulder_lift": -34.37362637362637,
+          "elbow_flex": 35.38461538461539,
+          "wrist_flex": 66.15384615384616,
+          "wrist_roll": -165.93406593406593
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          819.135498046875,
+          410.3574523925781
+        ],
+        [
+          845.41015625,
+          357.47296142578125
+        ],
+        [
+          874.6874389648438,
+          299.68701171875
+        ],
+        [
+          904.641357421875,
+          237.9727325439453
+        ],
+        [
+          935.0293579101562,
+          173.34230041503906
+        ],
+        [
+          964.5372924804688,
+          106.822021484375
+        ],
+        [
+          865.9083251953125,
+          451.8701477050781
+        ],
+        [
+          895.3587036132812,
+          399.4225769042969
+        ],
+        [
+          927.3693237304688,
+          341.0506896972656
+        ],
+        [
+          960.4299926757812,
+          278.81256103515625
+        ],
+        [
+          993.7803344726562,
+          212.29444885253906
+        ],
+        [
+          1026.219482421875,
+          144.27418518066406
+        ],
+        [
+          914.4027709960938,
+          495.0253601074219
+        ],
+        [
+          947.4009399414062,
+          443.1611022949219
+        ],
+        [
+          982.1856079101562,
+          385.2586669921875
+        ],
+        [
+          1018.7486572265625,
+          322.3807373046875
+        ],
+        [
+          1054.8433837890625,
+          255.2327423095703
+        ],
+        [
+          1089.783935546875,
+          185.38548278808594
+        ],
+        [
+          963.6175537109375,
+          539.03857421875
+        ],
+        [
+          1000.0126953125,
+          488.0901794433594
+        ],
+        [
+          1038.0185546875,
+          431.3537902832031
+        ],
+        [
+          1077.2689208984375,
+          368.8172912597656
+        ],
+        [
+          1116.6336669921875,
+          301.3097229003906
+        ],
+        [
+          1153.597412109375,
+          230.71759033203125
+        ]
+      ],
+      "pnp_rms_px": 0.6503540873527527,
+      "T_base_gripper": [
+        [
+          -0.852748015891375,
+          0.35673295462429944,
+          -0.38152643483556964,
+          0.18499168054502677
+        ],
+        [
+          -0.357724976954998,
+          -0.9311193075766633,
+          -0.07106107176577979,
+          0.027038668551185006
+        ],
+        [
+          -0.3805964559160648,
+          0.07588434715389339,
+          0.9216224300662164,
+          0.17182843709658518
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.33096261368162416,
+          0.639264885921276,
+          0.6941211378232807,
+          0.015347768124560693
+        ],
+        [
+          -0.806124013669528,
+          0.573910953550604,
+          -0.14418839058664434,
+          0.03277756015799511
+        ],
+        [
+          -0.49053829914733293,
+          -0.51182675098386,
+          0.705269844844473,
+          0.33681658976165146
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0011.png",
+      "timestamp": 1793749935.110837,
+      "capture_duration_s": 0.18131518363952637,
+      "joints_deg": {
+        "shoulder_pan": -10.461538461538462,
+        "shoulder_lift": -52.39560439560439,
+        "elbow_flex": 49.0989010989011,
+        "wrist_flex": 66.50549450549453,
+        "wrist_roll": -165.93406593406596
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -52.395604395604394,
+          "elbow_flex": 49.0989010989011,
+          "wrist_flex": 66.50549450549451,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -52.395604395604394,
+          "elbow_flex": 49.0989010989011,
+          "wrist_flex": 66.50549450549451,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -52.395604395604394,
+          "elbow_flex": 49.0989010989011,
+          "wrist_flex": 66.50549450549451,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -52.395604395604394,
+          "elbow_flex": 49.0989010989011,
+          "wrist_flex": 66.50549450549451,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -52.395604395604394,
+          "elbow_flex": 49.0989010989011,
+          "wrist_flex": 66.50549450549451,
+          "wrist_roll": -165.93406593406593
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -52.395604395604394,
+          "elbow_flex": 49.0989010989011,
+          "wrist_flex": 66.50549450549451,
+          "wrist_roll": -165.93406593406593
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          738.00390625,
+          420.6918640136719
+        ],
+        [
+          757.4816284179688,
+          368.2711181640625
+        ],
+        [
+          780.0402221679688,
+          310.89666748046875
+        ],
+        [
+          803.543212890625,
+          249.70069885253906
+        ],
+        [
+          827.8245849609375,
+          184.95513916015625
+        ],
+        [
+          851.9974975585938,
+          118.04008483886719
+        ],
+        [
+          781.8013305664062,
+          458.9190368652344
+        ],
+        [
+          804.2300415039062,
+          406.5662536621094
+        ],
+        [
+          829.2406616210938,
+          348.107177734375
+        ],
+        [
+          855.79638671875,
+          285.5315246582031
+        ],
+        [
+          883.0835571289062,
+          218.315673828125
+        ],
+        [
+          910.1405029296875,
+          148.97378540039062
+        ],
+        [
+          828.4763793945312,
+          499.2137145996094
+        ],
+        [
+          854.2794189453125,
+          446.852783203125
+        ],
+        [
+          882.2455444335938,
+          388.4580993652344
+        ],
+        [
+          912.3839721679688,
+          324.4267883300781
+        ],
+        [
+          942.5584106445312,
+          255.86480712890625
+        ],
+        [
+          972.7499389648438,
+          183.76370239257812
+        ],
+        [
+          877.0175170898438,
+          541.171630859375
+        ],
+        [
+          906.8455200195312,
+          489.34088134765625
+        ],
+        [
+          937.9841918945312,
+          431.3609619140625
+        ],
+        [
+          971.4498901367188,
+          367.02374267578125
+        ],
+        [
+          1005.35986328125,
+          296.88189697265625
+        ],
+        [
+          1038.004638671875,
+          223.416748046875
+        ]
+      ],
+      "pnp_rms_px": 0.5684020519256592,
+      "T_base_gripper": [
+        [
+          -0.8253569049319012,
+          0.34973309951266984,
+          -0.4432524546874986,
+          0.1570890161675452
+        ],
+        [
+          -0.3512570038093762,
+          -0.9326942487350429,
+          -0.08185325681629228,
+          0.02165450362249135
+        ],
+        [
+          -0.44204580843628877,
+          0.08813737846019098,
+          0.8926518390515268,
+          0.1658813893314113
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.29277051037712293,
+          0.6456730789226175,
+          0.7052600253864573,
+          -0.013571410540494487
+        ],
+        [
+          -0.8376526319510236,
+          0.5288809247142645,
+          -0.1364662436608688,
+          0.03978402239854568
+        ],
+        [
+          -0.46111115410391246,
+          -0.5508096246689702,
+          0.6956904921967715,
+          0.35158593484908346
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0012.png",
+      "timestamp": 1793749947.42067,
+      "capture_duration_s": 0.21616601943969727,
+      "joints_deg": {
+        "shoulder_pan": -10.461538461538462,
+        "shoulder_lift": -51.692307692307686,
+        "elbow_flex": 71.42857142857143,
+        "wrist_flex": 20.703296703296704,
+        "wrist_roll": -166.1978021978022
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -51.69230769230769,
+          "elbow_flex": 71.42857142857143,
+          "wrist_flex": 20.703296703296704,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -51.69230769230769,
+          "elbow_flex": 71.42857142857143,
+          "wrist_flex": 20.703296703296704,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -51.69230769230769,
+          "elbow_flex": 71.42857142857143,
+          "wrist_flex": 20.703296703296704,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -51.69230769230769,
+          "elbow_flex": 71.42857142857143,
+          "wrist_flex": 20.703296703296704,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -51.69230769230769,
+          "elbow_flex": 71.42857142857143,
+          "wrist_flex": 20.703296703296704,
+          "wrist_roll": -166.1978021978022
+        },
+        {
+          "shoulder_pan": -10.461538461538462,
+          "shoulder_lift": -51.69230769230769,
+          "elbow_flex": 71.42857142857143,
+          "wrist_flex": 20.703296703296704,
+          "wrist_roll": -166.1978021978022
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        18,
+        19,
+        20,
+        21
+      ],
+      "corners": [
+        [
+          861.5181884765625,
+          489.94451904296875
+        ],
+        [
+          894.3136596679688,
+          434.3076171875
+        ],
+        [
+          931.4948120117188,
+          371.3931579589844
+        ],
+        [
+          970.2437744140625,
+          302.2156677246094
+        ],
+        [
+          1009.37890625,
+          227.40463256835938
+        ],
+        [
+          1047.4783935546875,
+          149.09251403808594
+        ],
+        [
+          900.4785766601562,
+          545.1095581054688
+        ],
+        [
+          937.7810668945312,
+          490.5186767578125
+        ],
+        [
+          979.3277587890625,
+          427.3067932128906
+        ],
+        [
+          1023.2440795898438,
+          356.9472961425781
+        ],
+        [
+          1067.845703125,
+          279.2016296386719
+        ],
+        [
+          1111.0169677734375,
+          197.31961059570312
+        ],
+        [
+          941.609130859375,
+          603.4667358398438
+        ],
+        [
+          984.0892944335938,
+          550.6273193359375
+        ],
+        [
+          1030.263427734375,
+          488.7113037109375
+        ],
+        [
+          1080.2581787109375,
+          417.9783020019531
+        ],
+        [
+          1130.274169921875,
+          338.55975341796875
+        ],
+        [
+          983.2952270507812,
+          663.6275634765625
+        ],
+        [
+          1031.1251220703125,
+          613.277587890625
+        ],
+        [
+          1082.6195068359375,
+          553.7088012695312
+        ],
+        [
+          1137.888427734375,
+          483.7957458496094
+        ]
+      ],
+      "pnp_rms_px": 0.8028905391693115,
+      "T_base_gripper": [
+        [
+          -0.5914219126021841,
+          0.3000920457984875,
+          -0.7484416379000115,
+          0.171286045981701
+        ],
+        [
+          -0.303467183204764,
+          -0.9427654614022468,
+          -0.13820619922700658,
+          0.024276104484928295
+        ],
+        [
+          -0.7470795071555242,
+          0.14538930096636188,
+          0.6486402401584189,
+          0.12805953605251053
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.32385645417349557,
+          0.4157134204867222,
+          0.8498819618731771,
+          0.029590752925970316
+        ],
+        [
+          -0.791872042182875,
+          0.6106794706796808,
+          0.00304185790401007,
+          0.053771269420829826
+        ],
+        [
+          -0.5177409254630098,
+          -0.6739828900777933,
+          0.5269643232545174,
+          0.29563123439659605
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0013.png",
+      "timestamp": 1793749964.051496,
+      "capture_duration_s": 0.18050813674926758,
+      "joints_deg": {
+        "shoulder_pan": -18.63736263736264,
+        "shoulder_lift": -51.78021978021979,
+        "elbow_flex": 60.43956043956043,
+        "wrist_flex": 40.39560439560439,
+        "wrist_roll": -138.32967032967034
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -18.63736263736264,
+          "shoulder_lift": -51.78021978021978,
+          "elbow_flex": 60.43956043956044,
+          "wrist_flex": 40.395604395604394,
+          "wrist_roll": -138.32967032967034
+        },
+        {
+          "shoulder_pan": -18.63736263736264,
+          "shoulder_lift": -51.78021978021978,
+          "elbow_flex": 60.43956043956044,
+          "wrist_flex": 40.395604395604394,
+          "wrist_roll": -138.32967032967034
+        },
+        {
+          "shoulder_pan": -18.63736263736264,
+          "shoulder_lift": -51.78021978021978,
+          "elbow_flex": 60.43956043956044,
+          "wrist_flex": 40.395604395604394,
+          "wrist_roll": -138.32967032967034
+        },
+        {
+          "shoulder_pan": -18.63736263736264,
+          "shoulder_lift": -51.78021978021978,
+          "elbow_flex": 60.43956043956044,
+          "wrist_flex": 40.395604395604394,
+          "wrist_roll": -138.32967032967034
+        },
+        {
+          "shoulder_pan": -18.63736263736264,
+          "shoulder_lift": -51.78021978021978,
+          "elbow_flex": 60.43956043956044,
+          "wrist_flex": 40.395604395604394,
+          "wrist_roll": -138.32967032967034
+        },
+        {
+          "shoulder_pan": -18.63736263736264,
+          "shoulder_lift": -51.78021978021978,
+          "elbow_flex": 60.43956043956044,
+          "wrist_flex": 40.395604395604394,
+          "wrist_roll": -138.32967032967034
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          733.7293090820312,
+          379.7737121582031
+        ],
+        [
+          796.3984985351562,
+          348.3104553222656
+        ],
+        [
+          864.4102172851562,
+          315.110107421875
+        ],
+        [
+          934.2382202148438,
+          280.4523620605469
+        ],
+        [
+          1004.9508666992188,
+          244.4241485595703
+        ],
+        [
+          1073.8851318359375,
+          208.80413818359375
+        ],
+        [
+          751.0660400390625,
+          448.7591247558594
+        ],
+        [
+          816.7658081054688,
+          419.1889343261719
+        ],
+        [
+          888.009521484375,
+          386.75555419921875
+        ],
+        [
+          961.485107421875,
+          351.97393798828125
+        ],
+        [
+          1036.0313720703125,
+          315.68890380859375
+        ],
+        [
+          1107.980712890625,
+          278.90887451171875
+        ],
+        [
+          769.145263671875,
+          521.1947021484375
+        ],
+        [
+          838.0457763671875,
+          494.0115051269531
+        ],
+        [
+          912.0365600585938,
+          463.0183410644531
+        ],
+        [
+          989.0755615234375,
+          429.4810791015625
+        ],
+        [
+          1066.6561279296875,
+          392.8692321777344
+        ],
+        [
+          1141.2991943359375,
+          355.3116149902344
+        ],
+        [
+          787.5609741210938,
+          595.540283203125
+        ],
+        [
+          859.0927734375,
+          571.2291870117188
+        ],
+        [
+          935.6500244140625,
+          542.8018188476562
+        ],
+        [
+          1015.0576782226562,
+          510.11639404296875
+        ],
+        [
+          1095.189208984375,
+          474.2968444824219
+        ],
+        [
+          1172.163818359375,
+          435.6832580566406
+        ]
+      ],
+      "pnp_rms_px": 0.9714500308036804,
+      "T_base_gripper": [
+        [
+          -0.35654768499128264,
+          0.6980459339886921,
+          -0.6209715149418781,
+          0.1653611119990659
+        ],
+        [
+          -0.7826992184745601,
+          -0.5861026676976112,
+          -0.20944115239621827,
+          0.042485412780556356
+        ],
+        [
+          -0.510152606311748,
+          0.41135816141119347,
+          0.7553335563270922,
+          0.14692188148454952
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.8079956155842729,
+          0.21358199993164015,
+          0.5491136626435301,
+          -0.018572623721121145
+        ],
+        [
+          -0.41579224140400717,
+          0.8670174625292847,
+          0.2745861097315595,
+          0.002338635908400473
+        ],
+        [
+          -0.41744448395544,
+          -0.45018157333955944,
+          0.7893520468337909,
+          0.3007492645190767
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0014.png",
+      "timestamp": 1793750018.967893,
+      "capture_duration_s": 0.19443202018737793,
+      "joints_deg": {
+        "shoulder_pan": -18.109890109890106,
+        "shoulder_lift": -70.32967032967032,
+        "elbow_flex": 63.16483516483516,
+        "wrist_flex": 62.02197802197802,
+        "wrist_roll": -161.36263736263734
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -18.10989010989011,
+          "shoulder_lift": -70.32967032967034,
+          "elbow_flex": 63.16483516483517,
+          "wrist_flex": 62.02197802197802,
+          "wrist_roll": -161.36263736263737
+        },
+        {
+          "shoulder_pan": -18.10989010989011,
+          "shoulder_lift": -70.32967032967034,
+          "elbow_flex": 63.16483516483517,
+          "wrist_flex": 62.02197802197802,
+          "wrist_roll": -161.36263736263737
+        },
+        {
+          "shoulder_pan": -18.10989010989011,
+          "shoulder_lift": -70.32967032967034,
+          "elbow_flex": 63.16483516483517,
+          "wrist_flex": 62.02197802197802,
+          "wrist_roll": -161.36263736263737
+        },
+        {
+          "shoulder_pan": -18.10989010989011,
+          "shoulder_lift": -70.32967032967034,
+          "elbow_flex": 63.16483516483517,
+          "wrist_flex": 62.02197802197802,
+          "wrist_roll": -161.36263736263737
+        },
+        {
+          "shoulder_pan": -18.10989010989011,
+          "shoulder_lift": -70.32967032967034,
+          "elbow_flex": 63.16483516483517,
+          "wrist_flex": 62.02197802197802,
+          "wrist_roll": -161.36263736263737
+        },
+        {
+          "shoulder_pan": -18.10989010989011,
+          "shoulder_lift": -70.32967032967034,
+          "elbow_flex": 63.16483516483517,
+          "wrist_flex": 62.02197802197802,
+          "wrist_roll": -161.36263736263737
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          684.0859985351562,
+          356.2112121582031
+        ],
+        [
+          716.462890625,
+          306.0494689941406
+        ],
+        [
+          753.1909790039062,
+          251.46963500976562
+        ],
+        [
+          792.0535278320312,
+          193.2299041748047
+        ],
+        [
+          832.5489501953125,
+          132.12445068359375
+        ],
+        [
+          873.5143432617188,
+          70.16999053955078
+        ],
+        [
+          718.8056640625,
+          404.781494140625
+        ],
+        [
+          754.1859741210938,
+          354.82769775390625
+        ],
+        [
+          793.88525390625,
+          299.6627502441406
+        ],
+        [
+          836.0482788085938,
+          240.4125213623047
+        ],
+        [
+          880.0523681640625,
+          177.1728057861328
+        ],
+        [
+          924.45458984375,
+          112.4881820678711
+        ],
+        [
+          756.3316650390625,
+          456.52947998046875
+        ],
+        [
+          795.544921875,
+          407.13775634765625
+        ],
+        [
+          837.981689453125,
+          352.3211975097656
+        ],
+        [
+          884.3059692382812,
+          292.7096252441406
+        ],
+        [
+          931.7153930664062,
+          228.1272735595703
+        ],
+        [
+          979.7438354492188,
+          161.1178741455078
+        ],
+        [
+          796.0637817382812,
+          511.13153076171875
+        ],
+        [
+          839.0490112304688,
+          463.0998229980469
+        ],
+        [
+          885.1079711914062,
+          409.06329345703125
+        ],
+        [
+          934.9954223632812,
+          349.36956787109375
+        ],
+        [
+          986.8741455078125,
+          284.3534240722656
+        ],
+        [
+          1037.6116943359375,
+          215.69775390625
+        ]
+      ],
+      "pnp_rms_px": 0.9453770518302917,
+      "T_base_gripper": [
+        [
+          -0.6627736203591447,
+          0.5112800267411104,
+          -0.5471049829892263,
+          0.1360194356940746
+        ],
+        [
+          -0.5040817856364336,
+          -0.8449162732007666,
+          -0.1789358674780221,
+          0.03159648724887852
+        ],
+        [
+          -0.5537442383859329,
+          0.15719168405528705,
+          0.8177151661295307,
+          0.1528798941010914
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.4930255331095909,
+          0.508850129887362,
+          0.7056892864537613,
+          -0.035373818745914005
+        ],
+        [
+          -0.728680021217472,
+          0.6846814612265426,
+          0.01538581590917848,
+          0.007614815552302791
+        ],
+        [
+          -0.475343297397269,
+          -0.5218072843170181,
+          0.7083543658743061,
+          0.3375238952313953
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0015.png",
+      "timestamp": 1793750093.217422,
+      "capture_duration_s": 0.19028592109680176,
+      "joints_deg": {
+        "shoulder_pan": -32.879120879120876,
+        "shoulder_lift": -100.83516483516483,
+        "elbow_flex": 61.582417582417584,
+        "wrist_flex": 97.53846153846153,
+        "wrist_roll": -109.65567765567766
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -32.879120879120876,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 61.582417582417584,
+          "wrist_flex": 97.53846153846153,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -32.879120879120876,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 61.582417582417584,
+          "wrist_flex": 97.53846153846153,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -32.879120879120876,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 61.582417582417584,
+          "wrist_flex": 97.53846153846153,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -32.879120879120876,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 61.582417582417584,
+          "wrist_flex": 97.53846153846153,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -32.879120879120876,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 61.582417582417584,
+          "wrist_flex": 97.53846153846153,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -32.879120879120876,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 61.582417582417584,
+          "wrist_flex": 97.53846153846153,
+          "wrist_roll": -109.58241758241758
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          801.23291015625,
+          98.37234497070312
+        ],
+        [
+          859.9800415039062,
+          105.0794906616211
+        ],
+        [
+          920.3011474609375,
+          114.31391906738281
+        ],
+        [
+          980.25439453125,
+          124.94379425048828
+        ],
+        [
+          1039.806396484375,
+          136.54830932617188
+        ],
+        [
+          1097.264404296875,
+          148.912353515625
+        ],
+        [
+          786.2919921875,
+          144.0354766845703
+        ],
+        [
+          847.7122802734375,
+          151.9850311279297
+        ],
+        [
+          910.730712890625,
+          161.96908569335938
+        ],
+        [
+          973.8073120117188,
+          173.19912719726562
+        ],
+        [
+          1035.9659423828125,
+          185.61172485351562
+        ],
+        [
+          1095.5382080078125,
+          198.69085693359375
+        ],
+        [
+          769.916259765625,
+          194.85214233398438
+        ],
+        [
+          833.7879028320312,
+          204.07955932617188
+        ],
+        [
+          899.592529296875,
+          214.6866912841797
+        ],
+        [
+          965.414306640625,
+          227.22227478027344
+        ],
+        [
+          1030.5267333984375,
+          240.03726196289062
+        ],
+        [
+          1093.189208984375,
+          253.27659606933594
+        ],
+        [
+          751.82275390625,
+          250.17713928222656
+        ],
+        [
+          817.9387817382812,
+          261.4588317871094
+        ],
+        [
+          886.37451171875,
+          273.0877990722656
+        ],
+        [
+          955.033935546875,
+          286.24774169921875
+        ],
+        [
+          1023.05810546875,
+          300.0606689453125
+        ],
+        [
+          1088.4224853515625,
+          313.0697021484375
+        ]
+      ],
+      "pnp_rms_px": 0.46414440870285034,
+      "T_base_gripper": [
+        [
+          0.22899423767468208,
+          0.8675583958424078,
+          -0.4414794093897685,
+          0.07912802339026132
+        ],
+        [
+          -0.9525109502159195,
+          0.106190517141045,
+          -0.2853882684836279,
+          0.025833954643998742
+        ],
+        [
+          -0.20071006160767602,
+          0.48586624072131723,
+          0.8506758885126444,
+          0.16034629268755574
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.9341904989094617,
+          -0.294967828054056,
+          0.20070399139121217,
+          0.020459979282376223
+        ],
+        [
+          0.1854178938098553,
+          0.8820097318330734,
+          0.43321938738572985,
+          -0.1245292196158056
+        ],
+        [
+          -0.30480865539286794,
+          -0.3674953242761365,
+          0.87865742484359,
+          0.3492796972776897
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0016.png",
+      "timestamp": 1793750096.319315,
+      "capture_duration_s": 0.1895751953125,
+      "joints_deg": {
+        "shoulder_pan": -41.05494505494506,
+        "shoulder_lift": -100.65934065934066,
+        "elbow_flex": 62.02197802197802,
+        "wrist_flex": 97.68498168498168,
+        "wrist_roll": -109.67032967032968
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.65934065934066,
+          "elbow_flex": 62.02197802197802,
+          "wrist_flex": 97.71428571428571,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.65934065934066,
+          "elbow_flex": 62.02197802197802,
+          "wrist_flex": 97.71428571428571,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.65934065934066,
+          "elbow_flex": 62.02197802197802,
+          "wrist_flex": 97.71428571428571,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.65934065934066,
+          "elbow_flex": 62.02197802197802,
+          "wrist_flex": 97.71428571428571,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.65934065934066,
+          "elbow_flex": 62.02197802197802,
+          "wrist_flex": 97.62637362637362,
+          "wrist_roll": -109.67032967032966
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.65934065934066,
+          "elbow_flex": 62.02197802197802,
+          "wrist_flex": 97.62637362637362,
+          "wrist_roll": -109.67032967032966
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          903.053466796875,
+          48.380367279052734
+        ],
+        [
+          961.7662353515625,
+          64.70269775390625
+        ],
+        [
+          1020.9732055664062,
+          83.81976318359375
+        ],
+        [
+          1078.9345703125,
+          104.56930541992188
+        ],
+        [
+          1135.321044921875,
+          126.44735717773438
+        ],
+        [
+          1188.6807861328125,
+          148.9915313720703
+        ],
+        [
+          884.3218994140625,
+          91.90392303466797
+        ],
+        [
+          945.9139404296875,
+          109.16183471679688
+        ],
+        [
+          1007.980712890625,
+          129.7545166015625
+        ],
+        [
+          1068.918212890625,
+          151.51583862304688
+        ],
+        [
+          1127.9908447265625,
+          174.56039428710938
+        ],
+        [
+          1183.7666015625,
+          198.12403869628906
+        ],
+        [
+          863.3662109375,
+          140.3973846435547
+        ],
+        [
+          927.4105834960938,
+          159.8197479248047
+        ],
+        [
+          992.474365234375,
+          180.83279418945312
+        ],
+        [
+          1056.0701904296875,
+          204.3228302001953
+        ],
+        [
+          1118.019775390625,
+          228.06939697265625
+        ],
+        [
+          1176.1473388671875,
+          252.40194702148438
+        ],
+        [
+          839.7490234375,
+          193.98719787597656
+        ],
+        [
+          906.3015747070312,
+          215.3240203857422
+        ],
+        [
+          974.1272583007812,
+          237.97080993652344
+        ],
+        [
+          1040.798583984375,
+          262.3329772949219
+        ],
+        [
+          1105.0504150390625,
+          287.5320739746094
+        ],
+        [
+          1166.123046875,
+          311.83544921875
+        ]
+      ],
+      "pnp_rms_px": 0.5868621468544006,
+      "T_base_gripper": [
+        [
+          0.35991682973878325,
+          0.8485506719917133,
+          -0.3878422781662602,
+          0.07525585937435635
+        ],
+        [
+          -0.9120578791010103,
+          0.2324522833219274,
+          -0.3378111323627277,
+          0.031485485180723485
+        ],
+        [
+          -0.196495040244149,
+          0.4753185174604851,
+          0.857590815085269,
+          0.15918744453450134
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.8894595474090606,
+          -0.4205555519286589,
+          0.1788707389844692,
+          0.06383623859825353
+        ],
+        [
+          0.3280016377915358,
+          0.8599874177266396,
+          0.39094317612402,
+          -0.14396425464772733
+        ],
+        [
+          -0.3182399081336896,
+          -0.2890582451580433,
+          0.902866929163547,
+          0.32411706671164847
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0017.png",
+      "timestamp": 1793750115.128747,
+      "capture_duration_s": 0.19109106063842773,
+      "joints_deg": {
+        "shoulder_pan": -41.05494505494506,
+        "shoulder_lift": -100.48351648351648,
+        "elbow_flex": 62.285714285714285,
+        "wrist_flex": 98.15384615384617,
+        "wrist_roll": -53.40659340659341
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 62.285714285714285,
+          "wrist_flex": 98.15384615384616,
+          "wrist_roll": -53.40659340659341
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 62.285714285714285,
+          "wrist_flex": 98.15384615384616,
+          "wrist_roll": -53.40659340659341
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 62.285714285714285,
+          "wrist_flex": 98.15384615384616,
+          "wrist_roll": -53.40659340659341
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 62.285714285714285,
+          "wrist_flex": 98.15384615384616,
+          "wrist_roll": -53.40659340659341
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 62.285714285714285,
+          "wrist_flex": 98.15384615384616,
+          "wrist_roll": -53.40659340659341
+        },
+        {
+          "shoulder_pan": -41.05494505494506,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 62.285714285714285,
+          "wrist_flex": 98.15384615384616,
+          "wrist_roll": -53.40659340659341
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          928.13525390625,
+          174.17218017578125
+        ],
+        [
+          954.0467529296875,
+          229.21153259277344
+        ],
+        [
+          977.4331665039062,
+          285.7896423339844
+        ],
+        [
+          999.3378295898438,
+          341.2758483886719
+        ],
+        [
+          1019.8262329101562,
+          396.29339599609375
+        ],
+        [
+          1038.364013671875,
+          448.8475036621094
+        ],
+        [
+          889.0514526367188,
+          188.2996063232422
+        ],
+        [
+          916.1943969726562,
+          246.48194885253906
+        ],
+        [
+          941.345458984375,
+          305.88690185546875
+        ],
+        [
+          964.5350341796875,
+          364.680908203125
+        ],
+        [
+          986.2464599609375,
+          421.8874206542969
+        ],
+        [
+          1005.8358154296875,
+          476.85302734375
+        ],
+        [
+          844.7784423828125,
+          204.51605224609375
+        ],
+        [
+          873.0437622070312,
+          266.0966491699219
+        ],
+        [
+          900.2315063476562,
+          328.5438537597656
+        ],
+        [
+          924.6726684570312,
+          390.07794189453125
+        ],
+        [
+          948.0723876953125,
+          450.1796569824219
+        ],
+        [
+          969.1666259765625,
+          506.93505859375
+        ],
+        [
+          795.3167724609375,
+          222.92352294921875
+        ],
+        [
+          824.499267578125,
+          288.1294860839844
+        ],
+        [
+          853.622314453125,
+          353.7643737792969
+        ],
+        [
+          880.0964965820312,
+          418.4166259765625
+        ],
+        [
+          904.9308471679688,
+          480.8150329589844
+        ],
+        [
+          928.4562377929688,
+          539.6122436523438
+        ]
+      ],
+      "pnp_rms_px": 0.43625468015670776,
+      "T_base_gripper": [
+        [
+          0.9089202283371219,
+          0.17699446228136662,
+          -0.3775406982582457,
+          0.07515084041203506
+        ],
+        [
+          -0.3102821329400441,
+          0.8919585964316737,
+          -0.3288386537951633,
+          0.031394017908189395
+        ],
+        [
+          0.2785480506084555,
+          0.4160322374208138,
+          0.8656374304111744,
+          0.1582650713448282
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.4049815292699045,
+          -0.7896243448454071,
+          -0.46095916844951834,
+          0.09811017245957344
+        ],
+        [
+          0.9142279875575107,
+          0.3570497912800207,
+          0.1915793133755262,
+          -0.09868393944407507
+        ],
+        [
+          0.013309685073429639,
+          -0.49900785622508553,
+          0.8664952462125172,
+          0.342011856273535
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0018.png",
+      "timestamp": 1793750122.851397,
+      "capture_duration_s": 0.19213390350341797,
+      "joints_deg": {
+        "shoulder_pan": -41.23076923076923,
+        "shoulder_lift": -100.48351648351648,
+        "elbow_flex": 70.9010989010989,
+        "wrist_flex": 89.0989010989011,
+        "wrist_roll": -53.494505494505496
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -41.23076923076923,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 70.9010989010989,
+          "wrist_flex": 89.0989010989011,
+          "wrist_roll": -53.494505494505496
+        },
+        {
+          "shoulder_pan": -41.23076923076923,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 70.9010989010989,
+          "wrist_flex": 89.0989010989011,
+          "wrist_roll": -53.494505494505496
+        },
+        {
+          "shoulder_pan": -41.23076923076923,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 70.9010989010989,
+          "wrist_flex": 89.0989010989011,
+          "wrist_roll": -53.494505494505496
+        },
+        {
+          "shoulder_pan": -41.23076923076923,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 70.9010989010989,
+          "wrist_flex": 89.0989010989011,
+          "wrist_roll": -53.494505494505496
+        },
+        {
+          "shoulder_pan": -41.23076923076923,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 70.9010989010989,
+          "wrist_flex": 89.0989010989011,
+          "wrist_roll": -53.494505494505496
+        },
+        {
+          "shoulder_pan": -41.23076923076923,
+          "shoulder_lift": -100.48351648351648,
+          "elbow_flex": 70.9010989010989,
+          "wrist_flex": 89.0989010989011,
+          "wrist_roll": -53.494505494505496
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          934.7816772460938,
+          210.25393676757812
+        ],
+        [
+          963.1052856445312,
+          267.3744201660156
+        ],
+        [
+          988.9671630859375,
+          325.88787841796875
+        ],
+        [
+          1012.82763671875,
+          382.9554138183594
+        ],
+        [
+          1034.90966796875,
+          438.9632873535156
+        ],
+        [
+          1054.9248046875,
+          491.9437561035156
+        ],
+        [
+          894.3251953125,
+          227.23365783691406
+        ],
+        [
+          924.1748657226562,
+          287.9913024902344
+        ],
+        [
+          951.8594970703125,
+          349.3346252441406
+        ],
+        [
+          977.27099609375,
+          409.79486083984375
+        ],
+        [
+          1000.9078369140625,
+          468.0021057128906
+        ],
+        [
+          1021.9093627929688,
+          523.2987670898438
+        ],
+        [
+          848.1993408203125,
+          246.97584533691406
+        ],
+        [
+          879.4556884765625,
+          311.1653747558594
+        ],
+        [
+          909.3076782226562,
+          375.9990234375
+        ],
+        [
+          936.2761840820312,
+          439.10931396484375
+        ],
+        [
+          961.836181640625,
+          500.04400634765625
+        ],
+        [
+          984.5228271484375,
+          557.0027465820312
+        ],
+        [
+          796.3743896484375,
+          268.9156494140625
+        ],
+        [
+          828.8350219726562,
+          337.1692199707031
+        ],
+        [
+          861.0699462890625,
+          405.1867980957031
+        ],
+        [
+          890.2252197265625,
+          471.3992004394531
+        ],
+        [
+          917.4774780273438,
+          534.6981811523438
+        ],
+        [
+          942.9041748046875,
+          593.5626220703125
+        ]
+      ],
+      "pnp_rms_px": 0.41848859190940857,
+      "T_base_gripper": [
+        [
+          0.9079856160119396,
+          0.173233616080483,
+          -0.3815130867678045,
+          0.08434473715106014
+        ],
+        [
+          -0.3102750649844161,
+          0.889904934739228,
+          -0.3343629632236299,
+          0.03964741252836974
+        ],
+        [
+          0.2815874733796496,
+          0.4219707589234709,
+          0.8617709518481199,
+          0.1421144497656175
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.4287563105308375,
+          -0.7847961986635106,
+          -0.4475074890359796,
+          0.0957513571523771
+        ],
+        [
+          0.9030807657195328,
+          0.3587412578896735,
+          0.23611404124947127,
+          -0.08126864636399032
+        ],
+        [
+          -0.024762002491847818,
+          -0.5053707910544871,
+          0.8625469301907899,
+          0.32903701015985404
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    },
+    {
+      "image": "0019.png",
+      "timestamp": 1793750158.817177,
+      "capture_duration_s": 0.18598413467407227,
+      "joints_deg": {
+        "shoulder_pan": -36.04395604395604,
+        "shoulder_lift": -100.83516483516483,
+        "elbow_flex": 97.0989010989011,
+        "wrist_flex": 56.21978021978021,
+        "wrist_roll": -99.73626373626372
+      },
+      "joint_readings_deg": [
+        {
+          "shoulder_pan": -36.043956043956044,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 97.0989010989011,
+          "wrist_flex": 56.21978021978022,
+          "wrist_roll": -99.73626373626374
+        },
+        {
+          "shoulder_pan": -36.043956043956044,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 97.0989010989011,
+          "wrist_flex": 56.21978021978022,
+          "wrist_roll": -99.73626373626374
+        },
+        {
+          "shoulder_pan": -36.043956043956044,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 97.0989010989011,
+          "wrist_flex": 56.21978021978022,
+          "wrist_roll": -99.73626373626374
+        },
+        {
+          "shoulder_pan": -36.043956043956044,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 97.0989010989011,
+          "wrist_flex": 56.21978021978022,
+          "wrist_roll": -99.73626373626374
+        },
+        {
+          "shoulder_pan": -36.043956043956044,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 97.0989010989011,
+          "wrist_flex": 56.21978021978022,
+          "wrist_roll": -99.73626373626374
+        },
+        {
+          "shoulder_pan": -36.043956043956044,
+          "shoulder_lift": -100.83516483516483,
+          "elbow_flex": 97.0989010989011,
+          "wrist_flex": 56.21978021978022,
+          "wrist_roll": -99.73626373626374
+        }
+      ],
+      "ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "corners": [
+        [
+          814.1527709960938,
+          84.94916534423828
+        ],
+        [
+          892.2650756835938,
+          107.21925354003906
+        ],
+        [
+          971.0767822265625,
+          133.9470672607422
+        ],
+        [
+          1047.1995849609375,
+          162.47251892089844
+        ],
+        [
+          1120.020263671875,
+          191.9775390625
+        ],
+        [
+          1186.73193359375,
+          221.56011962890625
+        ],
+        [
+          786.0509643554688,
+          141.60931396484375
+        ],
+        [
+          869.215576171875,
+          166.16444396972656
+        ],
+        [
+          953.2923583984375,
+          194.8595428466797
+        ],
+        [
+          1034.964599609375,
+          225.02542114257812
+        ],
+        [
+          1112.3094482421875,
+          256.156005859375
+        ],
+        [
+          1182.2164306640625,
+          286.47216796875
+        ],
+        [
+          753.89111328125,
+          207.0309600830078
+        ],
+        [
+          841.8073120117188,
+          235.05740356445312
+        ],
+        [
+          931.4199829101562,
+          265.150390625
+        ],
+        [
+          1018.1844482421875,
+          297.8492431640625
+        ],
+        [
+          1100.514892578125,
+          329.50213623046875
+        ],
+        [
+          1174.759765625,
+          360.0235595703125
+        ],
+        [
+          717.1558227539062,
+          281.54730224609375
+        ],
+        [
+          809.39111328125,
+          313.28265380859375
+        ],
+        [
+          904.6591796875,
+          346.0601501464844
+        ],
+        [
+          996.8948974609375,
+          379.762451171875
+        ],
+        [
+          1083.60302734375,
+          412.4668273925781
+        ],
+        [
+          1162.62451171875,
+          441.6265869140625
+        ]
+      ],
+      "pnp_rms_px": 0.779262363910675,
+      "T_base_gripper": [
+        [
+          0.43532159459251984,
+          0.7536773261050337,
+          -0.49240795829940875,
+          0.10852186177421695
+        ],
+        [
+          -0.8905336419152404,
+          0.2802485487606763,
+          -0.3583442249216709,
+          0.050492540590742645
+        ],
+        [
+          -0.13207930155252878,
+          0.5945008318183427,
+          0.7931732591739931,
+          0.08845565841260472
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "T_camera_board": [
+        [
+          0.9171370480213312,
+          -0.3947985508153201,
+          0.05471507489569563,
+          0.01769806673943374
+        ],
+        [
+          0.32779983457740114,
+          0.8252366776431207,
+          0.45992574870686737,
+          -0.10498707389711269
+        ],
+        [
+          -0.22673090569604074,
+          -0.4038793509783178,
+          0.8862700301012022,
+          0.25925752307432937
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ]
+    }
+  ],
+  "motor_calibration": {
+    "shoulder_pan": {
+      "id": 1,
+      "drive_mode": 0,
+      "homing_offset": -1433,
+      "range_min": 721,
+      "range_max": 3489
+    },
+    "shoulder_lift": {
+      "id": 2,
+      "drive_mode": 0,
+      "homing_offset": -918,
+      "range_min": 765,
+      "range_max": 3153
+    },
+    "elbow_flex": {
+      "id": 3,
+      "drive_mode": 0,
+      "homing_offset": -2007,
+      "range_min": 862,
+      "range_max": 3069
+    },
+    "wrist_flex": {
+      "id": 4,
+      "drive_mode": 0,
+      "homing_offset": 1610,
+      "range_min": 730,
+      "range_max": 3027
+    },
+    "wrist_roll": {
+      "id": 5,
+      "drive_mode": 0,
+      "homing_offset": 1551,
+      "range_min": 103,
+      "range_max": 3946
+    },
+    "gripper": {
+      "id": 6,
+      "drive_mode": 0,
+      "homing_offset": 1727,
+      "range_min": 2028,
+      "range_max": 3527
+    }
+  },
+  "motor_calibration_path": "/Users/jiafeng/.cache/huggingface/lerobot/calibration/robots/so_follower/my_awesome_follower_arm.json",
+  "urdf_sha256": "3a65d2d35e68a8d2f0c2cc176d19b884506543c93ba72980145b80abe276022c",
+  "joint_mapping": "LeRobot use_degrees=True; direct degrees-to-radians; no added offsets",
+  "image_size": [
+    1280,
+    720
+  ]
+}

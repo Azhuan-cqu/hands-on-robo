@@ -291,6 +291,10 @@ def main():
             cv2.destroyAllWindows()
     raw = solve(data['samples'])
     result = fit_joint_offsets(data['samples'], URDFFK(a.urdf))
+    if result['board_position_rms_mm'] >= raw['board_position_rms_mm']:
+        # Offsets did not explain the error: keep the plain solution so downstream FK is not biased by noise.
+        print('Joint-offset fit did not reduce the residual; using zero offsets.')
+        result = dict(raw, joint_offsets_deg=dict.fromkeys(URDFFK(a.urdf).names, 0.0), joint_offsets_note='fit rejected; zero offsets')
     result['before_offset_fit'] = {k: raw[k] for k in ('board_position_rms_mm', 'board_rotation_rms_deg')}
     result.update(base_frame='base_link', gripper_frame='gripper_link')
     save_json(a.output / 'handeye.json', result)
