@@ -1,3 +1,4 @@
 .venv/
 __pycache__/
 *_resolved/
+joint_vs_camera_result.json
