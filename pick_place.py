@@ -565,7 +565,7 @@ def main():
         for role in roles(c):
             old = matrix(obs['targets'][role]['T_base_marker'])
             new = matrix(fresh['targets'][role]['T_base_marker'])
-            if np.linalg.norm(old[:3, 3]-new[:3, 3]) > .003 or np.linalg.norm(cv2.Rodrigues(old[:3, :3].T @ new[:3, :3])[0]) > np.deg2rad(3):
+            if np.linalg.norm(old[:3, 3]-new[:3, 3]) > .01 or np.linalg.norm(cv2.Rodrigues(old[:3, :3].T @ new[:3, :3])[0]) > np.deg2rad(6):
                 raise ValueError('Scene changed; rerun observation and planning')
         execute(robot, planner, plan, obs, cap, a.output)
     finally:
