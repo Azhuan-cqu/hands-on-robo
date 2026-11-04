@@ -401,7 +401,7 @@ class Planner:
         if start[2, 2] > -np.cos(np.deg2rad(60)):
             raise ValueError('Observation TCP must point roughly down (within 60 deg); align stage does the rest')
         if start[2, 3] < safe_z:
-            raise ValueError('Teach observation pose higher than transfer clearance, then observe again')
+            print(f'Observation pose is low ({start[2,3]*1000:.0f} mm); align stage lifts to {safe_z*1000:.0f} mm first')
         candidates = []
         failures = []
         for yaw_offset in (0, np.pi/2, np.pi, 3*np.pi/2):
@@ -415,6 +415,7 @@ class Planner:
             above_pick[2] = safe_z
             align = start.copy()
             align[:3, :3] = R
+            align[2, 3] = max(start[2, 3], safe_z)
             targets = [('align', align, 'open'), ('approach', pose(above_pick), 'open'),
                        ('descend', pose(pick), 'open'), ('grasp', pose(pick), 'closed'),
                        ('lift', pose(above_pick), 'closed')]
