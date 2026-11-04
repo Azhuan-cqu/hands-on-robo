@@ -4,14 +4,14 @@
   "camera": "0",
   "calibration_dir": null,
   "camera_yml": "intrinsic_output/camera.yml",
-  "handeye_json": "handeye_output/handeye.json",
+  "handeye_json": "handeye_output_v4/handeye.json",
   "urdf": "so101_new_calib.urdf",
   "dictionary": "DICT_4X4_50",
   "cube": {
     "id": null,
-    "marker_mm": 180,
-    "side_mm": 250,
-    "grasp_depth_mm": null
+    "marker_mm": 18,
+    "side_mm": 25,
+    "grasp_depth_mm": 12
   },
   "plate": {
     "id": null,
@@ -56,17 +56,25 @@
       1.0
     ]
   ],
-  "table_z_m": null,
-  "workspace_min_m": null,
-  "workspace_max_m": null,
+  "table_z_m": 0.0,
+  "workspace_min_m": [
+    -0.45,
+    -0.45,
+    -0.02
+  ],
+  "workspace_max_m": [
+    0.45,
+    0.45,
+    0.5
+  ],
   "gripper_open": 100,
   "gripper_closed": 0,
   "clearance_m": 0.05,
   "link_radius_m": 0.035,
   "release_gap_mm": 3,
   "speed_deg_s": 8,
-  "tool_radius_mm": null,
-  "tcp_lowest_extent_mm": null,
+  "tool_radius_mm": 15,
+  "tcp_lowest_extent_mm": 10,
   "tcp_source": "so101_new_calib.urdf:gripper_frame_joint",
   "tcp_status": "URDF nominal reference frame; physical contact center and jaw opening not validated"
 }

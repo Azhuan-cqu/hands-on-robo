@@ -481,6 +481,7 @@ def main():
     p.add_argument('--pick-only', action='store_true', help='Auto-select one marker, grasp and lift; no plate required')
     p.add_argument('--teach-tcp', action='store_true')
     p.add_argument('--scan-markers', action='store_true', help='Show detected IDs without connecting robot')
+    p.add_argument('--ignore-calibration-gate', action='store_true', help='Execute even if hand-eye consistency is poor (expect misses)')
     a = p.parse_args()
     if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers]) > 1:
         p.error('Choose only one mode')
@@ -509,8 +510,10 @@ def main():
     offsets = json.loads(handeye_path.read_text()).get('joint_offsets_deg') if handeye_path.exists() else None
     fk = URDFFK(ROOT/c['urdf'], offsets=offsets)
     if not a.teach_tcp:
-        if a.execute:
+        if a.execute and not a.ignore_calibration_gate:
             calibration_gate(json.loads(handeye_path.read_text()))
+        elif a.execute:
+            print('WARNING: calibration gate ignored; hand-eye error is cm-level, expect misses.')
         check_config(c, planning=not a.locate_only)
         scene = Scene(c, fk)
     robot, cap = None, None
