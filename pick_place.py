@@ -274,7 +274,7 @@ class Planner:
         c = self.c
         cube = matrix(obs['targets']['cube']['T_base_marker'])
         pick_only = c.get('pick_only', False)
-        pick = cube[:3, 3] - np.array([0, 0, c['cube']['grasp_depth_mm']/1000])
+        pick = cube[:3, 3] - np.array([0, 0, c['cube']['grasp_depth_mm']/1000]) + np.array(c.get('pick_offset_mm', [0, 0, 0]))/1000  # ponytail: manual bias correction until hand-eye is fixed
         # ponytail: hand-eye error can put the marker below its true height; never plan the tool into the table.
         floor = c['table_z_m'] + max(c['tcp_lowest_extent_mm'], c['cube']['side_mm'] - c['cube']['grasp_depth_mm'])/1000 + .002
         if pick[2] < floor:
