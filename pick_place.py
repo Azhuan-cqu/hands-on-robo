@@ -449,7 +449,7 @@ def execute(robot, planner, plan, obs, cap, out):
         # Existing calibrated LeRobot controller setup; caller must support arm during configure.
         robot.configure()
         robot.bus.sync_write('Goal_Position', current | {'gripper': grip})
-        robot.bus.enable_torque()
+        robot.bus.enable_torque(num_retry=5)
         held_grip = None
         for stage in plan:
             if c.get('pick_only') and stage['stage'] == 'grasp':
@@ -541,7 +541,7 @@ def main():
         if a.execute:
             # Hold the observation pose with torque so the operator can let go (steadier camera, no hand tremor).
             robot.bus.sync_write('Goal_Position', robot.bus.sync_read('Present_Position'))
-            robot.bus.enable_torque()
+            robot.bus.enable_torque(num_retry=5)
             print('Torque ON: arm is holding itself. Let go, keep hands out of view, observing...')
             time.sleep(1)
         obs = observe(cap, robot, scene, a.output)
