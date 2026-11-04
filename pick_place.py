@@ -382,13 +382,18 @@ def execute(robot, planner, plan, obs, cap, out):
     c = planner.c
     log = {'status': 'running', 'events': []}
     last = np.array([obs['joints_deg'][n] for n in planner.fk.names])
+    frame_last = None
     def event(stage, **kw):
         log['events'].append({'time': time.time(), 'stage': stage, **kw})
         save_json(out / 'execution.json', log)
+        if frame_last is not None:
+            cv2.imwrite(str(out / f'exec_{stage}.png'), frame_last)
     def check_stop():
+        nonlocal frame_last
         ok, frame = cap.read()
         if not ok:
             raise RuntimeError('Camera lost during execution')
+        frame_last = frame
         cv2.imshow('Pick/place', frame)
         if cv2.waitKey(1) & 255 in (27, ord('q')):
             raise KeyboardInterrupt
@@ -444,6 +449,7 @@ def execute(robot, planner, plan, obs, cap, out):
                     raise RuntimeError('Grasp not visually confirmed; no lift')
                 return command
             if actual <= c['gripper_closed'] + 2:
+                event('empty_grasp', measured_opening=actual)
                 raise RuntimeError('Gripper reached closed endpoint: possible empty grasp; no lift')
             time.sleep(.05)
         raise RuntimeError('No stable contact before timeout; no lift')
