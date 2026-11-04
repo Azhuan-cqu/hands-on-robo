@@ -62,19 +62,19 @@
       -0.9999999999964793,
       0.0,
       2.65358979335273e-06,
-      -0.0079
+      -0.0059253803036634755
     ],
     [
       -0.0,
       1.0,
       0.0,
-      -0.000218121
+      0.011736539957739704
     ],
     [
       -2.65358979335273e-06,
       -0.0,
       -0.9999999999964793,
-      -0.0981274
+      -0.1039369412092726
     ],
     [
       0.0,
@@ -102,8 +102,8 @@
   "speed_deg_s": 15,
   "tool_radius_mm": 15,
   "tcp_lowest_extent_mm": 10,
-  "tcp_source": "so101_new_calib.urdf:gripper_frame_joint",
-  "tcp_status": "URDF nominal reference frame; physical contact center and jaw opening not validated",
+  "tcp_source": "fingers centre from descend screenshot",
+  "tcp_status": "shift from URDF [2.0, 12.0, -5.8] mm (gripper frame)",
   "pick_offset_mm": [
     0,
     0,
