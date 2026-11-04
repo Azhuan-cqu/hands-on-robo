@@ -664,10 +664,11 @@ def main():
     p.add_argument('--scan-markers', action='store_true', help='Show detected IDs without connecting robot')
     p.add_argument('--scan-color', action='store_true', help='Preview the colour mask (tune cube.hsv_ranges); no robot')
     p.add_argument('--teach-grasp-view', action='store_true', help='Hold the gripper centred just above the cube; records where the cube appears in the image')
+    p.add_argument('--teach-tcp-click', action='store_true', help='Camera only: click the point between the fingertips; sets T_gripper_tcp translation')
     p.add_argument('--ignore-calibration-gate', action='store_true', help='Execute even if hand-eye consistency is poor (expect misses)')
     p.add_argument('--auto', action='store_true', help='No keypresses or confirmations: capture when still, run the plan straight through')
     a = p.parse_args()
-    if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers, a.scan_color, a.teach_grasp_view]) > 1:
+    if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers, a.scan_color, a.teach_grasp_view, a.teach_tcp_click]) > 1:
         p.error('Choose only one mode')
     c = json.loads(a.config.read_text())
     c['pick_only'] = a.pick_only
@@ -703,6 +704,46 @@ def main():
                 if key == ord('s'):
                     saved = json.loads(a.config.read_text()); saved['cube']['hsv_ranges'] = c['cube']['hsv_ranges']
                     save_json(a.config, saved); print('Saved hsv_ranges to', a.config)
+        finally:
+            cap.release(); cv2.destroyAllWindows()
+        return
+    if a.teach_tcp_click:
+        scene = Scene(c, URDFFK(ROOT/c['urdf']))
+        cap = open_camera(c['camera'], *scene.size)
+        tcp = matrix(c['T_gripper_tcp']); Xinv = np.linalg.inv(scene.X)
+        tcp_cam = Xinv @ tcp                      # model TCP in camera frame
+        state = {'click': None}
+        def on_mouse(ev, x, y, flags, _):
+            if ev == cv2.EVENT_LBUTTONDOWN:
+                state['click'] = (x, y)
+        win = 'Click between the FINGERTIPS (grasp centre) | S save | Q quit'
+        cv2.namedWindow(win); cv2.setMouseCallback(win, on_mouse)
+        print('Red circle = where the model thinks the fingertips are. Click the real grasp centre, then S to save.')
+        try:
+            while True:
+                ok, frame = cap.read()
+                if not ok:
+                    raise RuntimeError('Camera read failed')
+                proj, _ = cv2.projectPoints(tcp_cam[:3, 3].reshape(1, 1, 3), np.zeros(3), np.zeros(3), scene.K, scene.D)
+                p0 = tuple(np.round(proj.reshape(2)).astype(int))
+                cv2.circle(frame, p0, 14, (0, 0, 255), 3); cv2.putText(frame, 'model TCP', (p0[0]+16, p0[1]), 0, .8, (0, 0, 255), 2)
+                if state['click']:
+                    cv2.circle(frame, state['click'], 14, (0, 255, 0), 3); cv2.putText(frame, 'new TCP', (state['click'][0]+16, state['click'][1]), 0, .8, (0, 255, 0), 2)
+                cv2.imshow(win, frame)
+                key = cv2.waitKey(1) & 255
+                if key in (27, ord('q')):
+                    break
+                if key == ord('s') and state['click']:
+                    # Ray through the clicked pixel, at the same camera depth as the model TCP (lateral correction only).
+                    und = cv2.undistortPoints(np.array([[state['click']]], np.float64), scene.K, scene.D).reshape(2)
+                    new_cam = np.array([und[0], und[1], 1.0]) * tcp_cam[2, 3]
+                    new_grip = scene.X[:3, :3] @ new_cam + scene.X[:3, 3]
+                    shift = new_grip - tcp[:3, 3]
+                    saved = json.loads(a.config.read_text())
+                    T = np.array(saved['T_gripper_tcp']); T[:3, 3] = new_grip
+                    saved['T_gripper_tcp'] = T.tolist(); saved['tcp_source'] = 'teach-tcp-click'; saved['tcp_status'] = f'clicked in image; shift from URDF {np.round(shift*1000,1).tolist()} mm'
+                    save_json(a.config, saved)
+                    print(f'Saved T_gripper_tcp: moved {np.round(shift*1000,1).tolist()} mm in gripper frame; was pixel {p0}, now {state["click"]}')
         finally:
             cap.release(); cv2.destroyAllWindows()
         return
