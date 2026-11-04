@@ -172,6 +172,8 @@ def main():
     p.add_argument('--max-motion-deg', type=float, default=.3)
     p.add_argument('--max-pnp-rms', type=float, default=1.0)
     p.add_argument('--auto', type=int, metavar='N', help='No keyboard: capture whenever the arm has been still for 2 s; solve after N samples')
+    p.add_argument('--auto-poses', type=int, metavar='N', help='Torque ON: servos drive to random poses around the start pose, capture each, solve after N samples (no hands on the arm)')
+    p.add_argument('--pose-range', type=float, nargs=5, default=[25, 15, 15, 20, 35], metavar='DEG', help='Half-range per joint for --auto-poses: pan lift elbow wrist_flex wrist_roll')
     a = p.parse_args()
     a.output.mkdir(parents=True, exist_ok=True)
     if a.solve_only:
@@ -212,6 +214,26 @@ def main():
             if a.auto:
                 print(f'AUTO mode: hold each pose still for 2 s to capture; solves after {a.auto} samples.')
             hold, last_attempt = [], 0.0
+            if a.auto_poses:
+                start_q = read()
+                robot.bus.sync_write('Goal_Position', robot.bus.sync_read('Present_Position'))
+                robot.bus.enable_torque(num_retry=5)
+                rng = np.random.default_rng(0)
+                tries = 0
+                print(f'AUTO-POSES: torque ON, servos will visit random poses around the start; solves after {a.auto_poses} samples. Ctrl-C stops (arm holds).')
+            def drive_to(goal):
+                cur = read()
+                steps = 40
+                for i in range(1, steps + 1):
+                    u = i / steps; sm = 3*u*u - 2*u**3
+                    robot.bus.sync_write('Goal_Position', {n: cur[n] + (goal[n] - cur[n]) * sm for n in fk.names})
+                    ok, frame = cap.read()
+                    if ok:
+                        cv2.imshow('Hand-eye', frame)
+                    if cv2.waitKey(1) & 255 in (27, ord('q')):
+                        raise KeyboardInterrupt
+                    time.sleep(.04)
+                time.sleep(1.0)
             while True:
                 ok, frame = cap.read()
                 if not ok:
@@ -227,9 +249,17 @@ def main():
                 key = cv2.waitKey(1) & 255
                 if key in (27, ord('q')):
                     return
-                if key == ord('c') or (a.auto and len(data['samples']) >= a.auto):
+                if key == ord('c') or (a.auto and len(data['samples']) >= a.auto) or (a.auto_poses and len(data['samples']) >= a.auto_poses):
                     break
-                if a.auto:
+                if a.auto_poses:
+                    if tries > 6 * a.auto_poses:
+                        raise RuntimeError('Too many failed poses; move the start pose so the board stays in view')
+                    tries += 1
+                    goal = {n: float(start_q[n] + rng.uniform(-r, r)) for n, r in zip(fk.names, a.pose_range)}
+                    drive_to(goal)
+                    for _ in range(3):
+                        cap.read()
+                elif a.auto:
                     now = time.time()
                     hold.append((now, [read()[n] for n in fk.names]))
                     hold = [h for h in hold if now - h[0] < 2]
