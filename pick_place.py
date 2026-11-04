@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SO101 marker-based pick/place. Default: observe and plan, no motor commands."""
+"""SO101 orange-cube / blue-tray vision pick/place. Default: observe and plan, no motor commands."""
 import argparse
 import json
 import time
@@ -7,21 +7,13 @@ from pathlib import Path
 import cv2
 import numpy as np
 from scipy.optimize import least_squares
-from camera_intrinsic import open_camera, save_json, reprojection
+from camera_intrinsic import open_camera, save_json
 from handeye_calibration import URDFFK, robot_reader, transform
 
+from detect_cube import detect_cube_top, draw_cube_detection
+from detect_tray import detect_tray_center, draw_tray_detection
+
 ROOT = Path(__file__).resolve().parent
-
-
-def select_marker(ids, selected=None):
-    values = np.asarray(ids).reshape(-1).tolist() if ids is not None else []
-    if selected is None:
-        if len(values) != 1:
-            raise ValueError(f'Automatic target selection needs exactly one visible marker; detected {values}. Hide other markers or set cube.id.')
-        return int(values[0])
-    if values.count(selected) != 1:
-        raise ValueError(f'Locked target ID {selected} is not uniquely visible')
-    return selected
 
 
 def contact_candidate(readings, command, closed):
@@ -45,20 +37,23 @@ def roles(c):
 
 
 def check_config(c, planning=True):
-    if c.get('detector') == 'color':
-        if not c.get('pick_only'):
-            raise ValueError('Color detector currently supports --pick-only (no plate marker)')
-        if not c['cube'].get('hsv_ranges') or c['table_z_m'] is None or c['cube']['side_mm'] is None:
-            raise ValueError('Color detector needs cube.hsv_ranges, cube.side_mm and table_z_m')
-        c['cube'].setdefault('id', -1); c['cube'].setdefault('marker_mm', 1)
+    if c.get('table_z_m') is None or not np.isfinite(c['table_z_m']):
+        raise ValueError('Fill table_z_m with the measured table height')
+    if c['cube'].get('side_mm') is None or not np.isfinite(c['cube']['side_mm']) or c['cube']['side_mm'] <= 0:
+        raise ValueError('Fill cube.side_mm with a positive measured size')
     for role in roles(c):
-        for key in ('id', 'marker_mm'):
-            if c[role][key] is None and not (c.get('pick_only') and key == 'id'):
-                raise ValueError(f'Fill {role}.{key} with measured data in config')
-        if c[role]['marker_mm'] <= 0:
-            raise ValueError('Marker length must be positive')
-    if not c.get('pick_only') and c['cube']['id'] == c['plate']['id']:
-        raise ValueError('Cube and plate need different marker IDs')
+        cfg = c[role]
+        lo, hi = cfg.get('hsv_low'), cfg.get('hsv_high')
+        if lo is None or hi is None or len(lo) != 3 or len(hi) != 3 or any(
+                not 0 <= l <= h <= limit for l, h, limit in zip(lo, hi, [179, 255, 255])):
+            raise ValueError(f'Invalid {role}.hsv_low / hsv_high')
+        if cfg.get('min_area_px', 400) <= 0 or not 0 <= cfg.get('canny_low', 15) < cfg.get('canny_high', 40):
+            raise ValueError(f'Invalid {role} area / Canny thresholds')
+    if not c.get('pick_only'):
+        for key in ('surface_height_mm', 'floor_height_mm'):
+            value = c['plate'].get(key)
+            if value is None or not np.isfinite(value) or value < 0:
+                raise ValueError(f'Fill plate.{key}: measured height above the table, mm')
     if planning:
         for key in ('T_gripper_tcp', 'table_z_m', 'workspace_min_m', 'workspace_max_m', 'gripper_open', 'gripper_closed', 'tool_radius_mm', 'tcp_lowest_extent_mm'):
             if c[key] is None:
@@ -68,8 +63,22 @@ def check_config(c, planning=True):
         if not c.get('pick_only'):
             dimensions += [('plate', 'rim_height_mm'), ('plate', 'inner_half_size_mm'), ('plate', 'outer_half_size_mm')]
         for role, key in dimensions:
-            if c[role][key] is None and not (c.get('pick_only') and key == 'id'):
+            if c[role][key] is None:
                 raise ValueError(f'Fill {role}.{key} in config first')
+        if not c.get('pick_only'):
+            for key in ('inner_half_size_mm', 'outer_half_size_mm'):
+                value = c['plate'][key]
+                try:
+                    size = np.asarray(value, dtype=float)
+                except (TypeError, ValueError):
+                    size = np.array([])
+                if size.shape != (2,) or not np.isfinite(size).all() or np.any(size <= 0):
+                    raise ValueError(
+                        f'plate.{key} must be [long_side_mm / 2, short_side_mm / 2], '
+                        f'two positive measured values; got {value!r}. '
+                        'Use --pick-only to omit tray placement.')
+                if size[0] < size[1]:
+                    raise ValueError(f'plate.{key} must list the long-side half-size first')
         if not 0 < c['cube']['grasp_depth_mm'] < c['cube']['side_mm']:
             raise ValueError('Grasp depth must be between cube top and bottom')
         if not 0 <= c['gripper_closed'] < c['gripper_open'] <= 100:
@@ -93,31 +102,31 @@ def calibration_gate(h):
         raise ValueError('Execution blocked: hand-eye consistency exceeds 5 mm / 2 deg. Recalibrate and validate on independent poses.')
 
 
-def marker_pose(corners, side_m, K, D, max_rms=1.5, up_hint=None):
-    """up_hint: base 'up' direction expressed in the camera frame; resolves the planar ambiguity."""
-    s = side_m / 2
-    obj = np.array([[-s, s, 0], [s, s, 0], [s, -s, 0], [-s, -s, 0]], dtype=np.float64)
-    img = np.asarray(corners, dtype=np.float64).reshape(4, 1, 2)
-    ok, rs, ts, _ = cv2.solvePnPGeneric(obj, img, K, D, flags=cv2.SOLVEPNP_IPPE_SQUARE)
-    candidates = []
-    if ok:
-        for r, t in zip(rs, ts):
-            R = cv2.Rodrigues(r)[0]
-            if np.min((obj @ R.T + t.reshape(3))[:, 2]) > 0:
-                candidates.append((reprojection(obj, img, r, t, K, D), transform(R, t)))
-    candidates.sort(key=lambda x: x[0])
-    if not candidates or candidates[0][0] > max_rms:
-        raise ValueError('Marker PnP reprojection too large / no valid solution')
-    if up_hint is not None and len(candidates) > 1 and candidates[1][0] - candidates[0][0] < .15:
-        # Planar ambiguity: both solutions fit; the marker lies flat, so take the one whose normal points up.
-        candidates.sort(key=lambda x: -float(up_hint @ x[1][:3, :3] @ [0, 0, 1]))
-    return candidates[0]
+def detect_objects(frame, c):
+    """Shared 2D detection for robot observation and camera-only preview."""
+    found, debug = {}, {}
+    view = frame.copy()
+    for role in roles(c):
+        cfg = c[role]
+        detector = detect_cube_top if role == 'cube' else detect_tray_center
+        result, details = detector(frame, hsv_low=cfg['hsv_low'], hsv_high=cfg['hsv_high'],
+                                   min_area=cfg.get('min_area_px', 400),
+                                   canny_low=cfg.get('canny_low', 15), canny_high=cfg.get('canny_high', 40))
+        debug[role] = details
+        if result is not None:
+            found[role] = result
+            # Render only successful geometry; show combined status below.
+            draw = draw_cube_detection if role == 'cube' else draw_tray_detection
+            rendered = draw(view, result)
+            view[35:] = rendered[35:]
+    status = ' | '.join(f'{role}: {"OK" if role in found else "not found"}' for role in roles(c))
+    cv2.putText(view, status, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, .6, (0, 220, 255), 2)
+    return found, view, debug
 
 
 class Scene:
     def __init__(self, c, fk):
         self.c, self.fk = c, fk
-        self.selected_id = c['cube']['id']
         fs = cv2.FileStorage(str(ROOT / c['camera_yml']), cv2.FILE_STORAGE_READ)
         if not fs.isOpened():
             raise ValueError('Cannot read camera calibration')
@@ -128,16 +137,6 @@ class Scene:
         if self.h.get('translation_unit') != 'meter' or self.h.get('gripper_frame') != 'gripper_link':
             raise ValueError('Hand-eye units/frame mismatch')
         self.X = matrix(self.h['T_gripper_camera'])
-        params = cv2.aruco.DetectorParameters()
-        params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
-        self.detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, c['dictionary'])), params)
-
-    def color_mask(self, frame):
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        mask = np.zeros(frame.shape[:2], np.uint8)
-        for lo, hi in self.c['cube']['hsv_ranges']:
-            mask |= cv2.inRange(hsv, np.array(lo, np.uint8), np.array(hi, np.uint8))
-        return cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
 
     def pixel_to_plane(self, T_base_cam, px, z_plane):
         """Cast the ray through pixel px and intersect with the horizontal plane z=z_plane (base frame)."""
@@ -148,87 +147,52 @@ class Scene:
             raise ValueError('Ray does not hit the table plane in front of the camera')
         return origin + ray * (z_plane - origin[2]) / ray[2]
 
-    def detect_color(self, frame, q):
-        """Cube by color: top-face centroid cast onto the plane z = table + side. Needs FK + hand-eye only."""
-        view = frame.copy()
-        mask = self.color_mask(frame)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contours = [k for k in contours if cv2.contourArea(k) > self.c['cube'].get('min_area_px', 400)]
-        if not contours:
-            return {}, cv2.addWeighted(view, .7, cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR), .3, 0)
-        blob = max(contours, key=cv2.contourArea)
-        (cx, cy), (w, h), angle = cv2.minAreaRect(blob)
-        cv2.drawContours(view, [cv2.boxPoints(((cx, cy), (w, h), angle)).astype(int)], 0, (0, 255, 0), 2)
-        T_base_cam = self.fk(q) @ self.X
-        top = self.c['table_z_m'] + self.c['cube']['side_mm'] / 1000
-        centre = self.pixel_to_plane(T_base_cam, (cx, cy), top)
-        # yaw: direction of one rectangle edge, cast onto the same plane
-        a = np.deg2rad(angle)
-        edge = self.pixel_to_plane(T_base_cam, (cx + 20 * np.cos(a), cy + 20 * np.sin(a)), top) - centre
-        x = np.array([edge[0], edge[1], 0]); x /= np.linalg.norm(x) + 1e-12
+    def object_pose(self, result, role, T_base_cam):
+        """Intersect visible corners with a measured horizontal plane.
+
+        Cube origin: top center. Plate origin: floor center, with XY measured
+        on surface_height_mm (the plane of the detected outer border).
+        Plate +X follows the longer edge, +Y the shorter edge; choose +X
+        toward positive base X (positive Y on the tie). A plain rectangle
+        has no identifiable front/back, so offsets use this convention.
+        """
+        cfg = self.c[role]
+        height = cfg['side_mm'] if role == 'cube' else cfg['surface_height_mm']
+        z = self.c['table_z_m'] + height / 1000
+        corners = result['top_corners_px' if role == 'cube' else 'corners_px']
+        points = np.array([self.pixel_to_plane(T_base_cam, px, z) for px in corners])
+        center = self.pixel_to_plane(T_base_cam, result['center_px'], z)
+        # Opposite edges are averaged; cyclic order from detectors is arbitrary.
+        axes = [points[1] - points[0] + points[2] - points[3],
+                points[2] - points[1] + points[3] - points[0]]
+        if role == 'plate':
+            x = max(axes, key=np.linalg.norm)
+        else:
+            # Square symmetry: choose the axis closest to base +X.
+            x = max(axes, key=lambda v: abs(v[0]) / max(np.linalg.norm(v), 1e-12))
+        x[2] = 0
+        if np.linalg.norm(x) < 1e-8:
+            raise ValueError(f'Degenerate {role} boundary')
+        x /= np.linalg.norm(x)
+        if x[0] < -1e-8 or (abs(x[0]) <= 1e-8 and x[1] < 0):
+            x = -x
+        if role == 'plate':
+            center[2] = self.c['table_z_m'] + cfg['floor_height_mm'] / 1000
         R = np.column_stack([x, np.cross([0, 0, 1], x), [0, 0, 1]])
-        B = transform(R, centre)
+        B = transform(R, center)
         C = np.linalg.inv(T_base_cam) @ B
-        cv2.drawFrameAxes(view, self.K, self.D, cv2.Rodrigues(C[:3, :3])[0], C[:3, 3], .025)
-        return {'cube': {'T_base_marker': B.tolist(), 'T_camera_marker': C.tolist(), 'id': -1, 'rms_px': 0.0,
-                         'pixel': [float(cx), float(cy)], 'area_px': float(cv2.contourArea(blob))}}, view
+        return {'T_base_object': B.tolist(), 'T_camera_object': C.tolist(),
+                'pixel': np.asarray(result['center_px']).tolist(),
+                'corners_px': np.asarray(corners).tolist(), 'edge_support': result['edge_support']}
 
     def detect(self, frame, q):
         if (frame.shape[1], frame.shape[0]) != self.size:
             raise ValueError('Camera resolution differs from calibration')
-        if self.c.get('detector') == 'color':
-            return self.detect_color(frame, q)
-        corners, ids, _ = self.detector.detectMarkers(frame)
-        view = frame.copy()
-        found = {}
-        if ids is not None:
-            cv2.aruco.drawDetectedMarkers(view, corners, ids)
-            for role in roles(self.c):
-                target_id = self.c[role]['id']
-                if self.c.get('pick_only'):
-                    self.selected_id = select_marker(ids, self.selected_id)
-                    target_id = self.selected_id
-                indices = np.flatnonzero(ids.ravel() == target_id)
-                if len(indices) != 1:
-                    continue
-                T_base_cam = self.fk(q) @ self.X
-                error, C = marker_pose(corners[indices[0]], self.c[role]['marker_mm'] / 1000, self.K, self.D, up_hint=T_base_cam[:3, :3].T @ [0, 0, 1])
-                B = T_base_cam @ C
-                found[role] = {'T_base_marker': B.tolist(), 'T_camera_marker': C.tolist(), 'id': int(target_id), 'rms_px': error}
-                r = cv2.Rodrigues(C[:3, :3])[0]
-                cv2.drawFrameAxes(view, self.K, self.D, r, C[:3, 3], .025)
+        detections, view, _ = detect_objects(frame, self.c)
+        T_base_cam = self.fk(q) @ self.X
+        found = {role: self.object_pose(result, role, T_base_cam)
+                 for role, result in detections.items()}
         return found, view
-
-
-def hsv_ranges_around(h, sat, val):
-    lo, hi = [max(0, int(h)-10), max(0, int(sat)-70), max(0, int(val)-80)], [min(180, int(h)+10), 255, 255]
-    ranges = [[lo, hi]]
-    if h < 10: ranges.append([[170 + int(h), lo[1], lo[2]], [180, 255, 255]])   # red wraps around
-    if h > 170: ranges.append([[0, lo[1], lo[2]], [int(h) - 170, 255, 255]])
-    return ranges
-
-
-def pick_color_by_click(cap, c):
-    """Show the camera; the operator clicks the cube to grasp. Its colour becomes cube.hsv_ranges for this run."""
-    state = {'hsv': None, 'done': False}
-    def on_mouse(ev, x, y, flags, _):
-        if ev == cv2.EVENT_LBUTTONDOWN and state['hsv'] is not None:
-            patch = state['hsv'][max(0, y-4):y+5, max(0, x-4):x+5].reshape(-1, 3)
-            h, sat, val = np.median(patch, axis=0)
-            c['cube']['hsv_ranges'] = hsv_ranges_around(h, sat, val); state['done'] = True
-            print(f'Target colour HSV=({int(h)},{int(sat)},{int(val)})')
-    cv2.namedWindow('Pick/place'); cv2.setMouseCallback('Pick/place', on_mouse)
-    print('CLICK the cube to grasp in the camera window (Q/ESC cancels).')
-    while not state['done']:
-        ok, frame = cap.read()
-        if not ok:
-            raise RuntimeError('Camera read failed')
-        state['hsv'] = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        cv2.putText(frame, 'CLICK the cube to grasp', (15, 30), 0, .8, (0, 255, 0), 2)
-        cv2.imshow('Pick/place', frame)
-        if cv2.waitKey(1) & 255 in (27, ord('q')):
-            raise KeyboardInterrupt
-    cv2.setMouseCallback('Pick/place', lambda *args: None)
 
 
 def read_q(robot, fk):
@@ -238,7 +202,7 @@ def read_q(robot, fk):
 
 def observe(cap, robot, scene, output):
     output.mkdir(parents=True, exist_ok=True)
-    print('Hold still with target marker(s) visible. SPACE capture, Q/ESC cancel.')
+    print('Hold still with target object(s) visible. SPACE capture, Q/ESC cancel.')
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -249,35 +213,36 @@ def observe(cap, robot, scene, output):
             raise KeyboardInterrupt
         if key != 32 and not scene.c.get('auto'):
             continue
-        readings, detections = [], []
+        readings = []
+        accepted = None
+        required = set(roles(scene.c))
         try:
-            for i in range(10):
+            for _ in range(10):
                 q0, _ = read_q(robot, scene.fk)
                 ok, frame = cap.read()
                 if not ok:
                     raise RuntimeError('Camera read failed')
                 q1, grip = read_q(robot, scene.fk)
                 readings.extend([list(q0.values()), list(q1.values())])
-                if i < 5:
-                    continue  # discard buffered frames
                 q = {n: (q0[n] + q1[n]) / 2 for n in q0}
                 found, view = scene.detect(frame, q)
-                if len(found) != len(roles(scene.c)):
-                    raise ValueError('Required target marker(s) must be visible')
                 cv2.imshow('Pick/place', view)
-                cv2.waitKey(1)
-                detections.append(found)
+                if cv2.waitKey(1) & 255 in (27, ord('q')):
+                    raise KeyboardInterrupt
+                if not required.issubset(found):
+                    continue
+                # Keep the last complete detection together with its own
+                # image and robot readings, even if later frames miss targets.
+                accepted = ({'time': time.time(), 'joints_deg': q,
+                             'gripper': grip, 'targets': found}, frame.copy())
+            if accepted is None:
+                raise ValueError('No frame detected all required targets in 10 frames: '
+                                 + ', '.join(sorted(required)))
             if np.max(np.ptp(readings, axis=0)) > .3:
                 raise ValueError('Robot moved during observation')
-            for role in roles(scene.c):
-                poses = np.array([d[role]['T_base_marker'] for d in detections])
-                if np.max(np.linalg.norm(poses[:, :3, 3] - poses[-1, :3, 3], axis=1)) > .015:
-                    raise ValueError('Target position unstable by >15 mm')
-                if any(np.linalg.norm(cv2.Rodrigues(poses[-1, :3, :3].T @ R)[0]) > np.deg2rad(10) for R in poses[:, :3, :3]):
-                    raise ValueError('Target orientation unstable by >10 deg')
-            record = {'time': time.time(), 'joints_deg': q, 'gripper': grip, 'targets': detections[-1]}
+            record, accepted_frame = accepted
             save_json(output / 'observation.json', record)
-            if not cv2.imwrite(str(output / 'observation.png'), frame):
+            if not cv2.imwrite(str(output / 'observation.png'), accepted_frame):
                 raise IOError('Image save failed')
             return record
         except ValueError as e:
@@ -331,8 +296,6 @@ class Planner:
                 raise ValueError('Conservative arm/table clearance failed')
         tcp = self.tcp(q)[:3, 3]
         lowest = tcp[2] - max(self.c['tcp_lowest_extent_mm'], self.c['cube']['side_mm']-self.c['cube']['grasp_depth_mm'])/1000
-        if tcp[2] - self.c['tcp_lowest_extent_mm']/1000 < self.c['table_z_m'] + .001 or lowest < self.c['table_z_m'] - .001:
-            raise ValueError('Tool/cube envelope intersects table')
         if self.plate is not None:
             local = (np.linalg.inv(self.plate) @ np.r_[tcp, 1])[:3]
             radius = max(self.c['tool_radius_mm'], self.c['cube']['side_mm']/np.sqrt(2))/1000
@@ -340,10 +303,6 @@ class Planner:
             inner = np.array(self.c['plate']['inner_half_size_mm'])/1000
             near = np.all(np.abs(local[:2]) < outer + radius)
             below_rim = lowest < self.plate[2, 3] + self.c['plate']['rim_height_mm']/1000 + .003
-            if near and below_rim and np.any(np.abs(local[:2]) + radius + .003 > inner):
-                raise ValueError('Tool/cube envelope intersects plate rim')
-            if near and lowest < self.plate[2, 3] + .001:
-                raise ValueError('Tool/cube envelope intersects plate floor')
         if np.any(tcp < self.c['workspace_min_m']) or np.any(tcp > self.c['workspace_max_m']):
             raise ValueError('TCP outside measured workspace')
 
@@ -373,10 +332,10 @@ class Planner:
 
     def plan(self, obs):
         c = self.c
-        cube = matrix(obs['targets']['cube']['T_base_marker'])
+        cube = matrix(obs['targets']['cube']['T_base_object'])
         pick_only = c.get('pick_only', False)
         pick = cube[:3, 3] - np.array([0, 0, c['cube']['grasp_depth_mm']/1000]) + np.array(c.get('pick_offset_mm', [0, 0, 0]))/1000  # ponytail: manual bias correction until hand-eye is fixed
-        # ponytail: hand-eye error can put the marker below its true height; never plan the tool into the table.
+        # ponytail: hand-eye error can put the target below its true height; never plan the tool into the table.
         floor = c['table_z_m'] + max(c['tcp_lowest_extent_mm'], c['cube']['side_mm'] - c['cube']['grasp_depth_mm'])/1000 + .002
         if pick[2] < floor:
             print(f'Pick height clamped from {pick[2]*1000:.0f} mm to {floor*1000:.0f} mm (table limit)')
@@ -385,7 +344,7 @@ class Planner:
         if pick_only:
             safe_z = cube[2, 3] + c['clearance_m']
         else:
-            plate = matrix(obs['targets']['plate']['T_base_marker'])
+            plate = matrix(obs['targets']['plate']['T_base_object'])
             self.plate = plate
             drop = (plate @ np.r_[np.array(c['plate']['drop_offset_mm'])/1000, 1])[:3]
             drop[2] += (c['cube']['side_mm'] - c['cube']['grasp_depth_mm'] + c['release_gap_mm'])/1000
@@ -491,7 +450,7 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
         cv2.imshow('Pick/place', frame)
         if cv2.waitKey(1) & 255 in (27, ord('q')):
             raise KeyboardInterrupt
-    def move(path, grip, allow_gripper_contact=False):
+    def move(path, grip, allow_gripper_contact=False, stage_name='motion'):
         """One continuous smooth motion through all waypoints of a stage; settle only at the end."""
         nonlocal last
         q, oldgrip = read_q(robot, planner.fk)
@@ -501,6 +460,7 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
         cum = np.r_[0, np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))]
         duration = max(.3, np.sum(np.max(np.abs(np.diff(pts, axis=0)), axis=1))/c['speed_deg_s'], abs(grip-oldgrip)/20)
         steps = max(2, int(np.ceil(duration*25)))
+        print(f'[{stage_name}] Moving: planned duration {duration:.1f}s, gripper target {grip:.1f}', flush=True)
         for u in np.linspace(0, 1, steps+1)[1:]:
             s = 3*u*u-2*u*u*u
             cmd = target.copy() if cum[-1] == 0 else np.array([np.interp(s*cum[-1], cum, pts[:, i]) for i in range(pts.shape[1])])
@@ -512,11 +472,12 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
                 raise RuntimeError('Joint tracking error >8 deg')
             time.sleep(duration/steps)
         deadline = time.monotonic()+3
+        next_report = 0.0
         boosts, boosted = 0, target.copy()
         while True:
             measured, measured_grip = read_q(robot, planner.fk)
             err = np.array([measured[n]-target[i] for i, n in enumerate(planner.fk.names)])
-            if np.max(np.abs(err)) < 1 and (allow_gripper_contact or abs(measured_grip-grip) < 10):
+            if np.max(np.abs(err)) < 2 and (allow_gripper_contact or abs(measured_grip-grip) < 10):
                 break
             if np.max(np.abs(err)) < 4 and boosts < 3 and time.monotonic() < deadline:
                 # Gravity / load droop compensation: push the goal past the target by the measured error.
@@ -527,12 +488,20 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
                 continue
             if np.max(np.abs(err)) < 4 and (allow_gripper_contact or abs(measured_grip-grip) < 10):
                 break
-            if time.monotonic() > deadline:
-                diff = {n: round(measured[n]-target[i], 1) for i, n in enumerate(planner.fk.names)} | {'gripper': round(measured_grip-grip, 1)}
-                raise RuntimeError(f'Motion failed to settle; measured-target = {diff}')
+            now = time.monotonic()
+            diff = {n: round(float(err[i]), 1) for i, n in enumerate(planner.fk.names)}
+            diff['gripper'] = round(float(measured_grip - grip), 1)
+            if now >= next_report:
+                print(f'[{stage_name}] Waiting to settle; measured-target = {diff}; '
+                      f'gripper check={not allow_gripper_contact}', flush=True)
+                next_report = now + 1
+            if now > deadline:
+                raise RuntimeError(f'[{stage_name}] Motion failed to settle within 3s; '
+                                   f'measured-target = {diff}')
             check_stop()
             time.sleep(.05)
         last = target.copy()
+        print(f'[{stage_name}] Motion complete', flush=True)
     def close_until_contact():
         hold, opening = read_q(robot, planner.fk)
         hold = np.array([hold[n] for n in planner.fk.names])  # drift is measured from where the arm actually settled
@@ -571,12 +540,13 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
         i = 0
         while i < len(plan):
             stage = plan[i]; i += 1
+            print(f'Starting stage {i}/{len(plan)}: {stage["stage"]}', flush=True)
             if c.get('pick_only') and stage['stage'] == 'grasp':
                 held_grip = close_until_contact()
                 event('grasp', measured=robot.bus.sync_read('Present_Position'))
                 continue
             grip_command = held_grip if c.get('pick_only') and stage['stage'] == 'lift' else stage['gripper']
-            move(stage['joints_deg'], grip_command, stage['stage'] in ('grasp', 'lift', 'transfer', 'place'))
+            move(stage['joints_deg'], grip_command, stage['stage'] in ('grasp', 'lift', 'transfer', 'place'), stage['stage'])
             event(stage['stage'], measured=robot.bus.sync_read('Present_Position'))
             if stage['stage'] == 'approach' and scene is not None and c.get('refine_at_approach', True):
                 # Closed-loop correction: the camera is now ~10 cm from the cube, so hand-eye rotation error matters far less.
@@ -586,8 +556,8 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
                 q_now, _ = read_q(robot, planner.fk)
                 found, _ = scene.detect(frame_last, q_now)
                 if 'cube' in found:
-                    old_p = np.array(obs['targets']['cube']['T_base_marker'])[:3, 3]
-                    new_p = np.array(found['cube']['T_base_marker'])[:3, 3]
+                    old_p = np.array(obs['targets']['cube']['T_base_object'])[:3, 3]
+                    new_p = np.array(found['cube']['T_base_object'])[:3, 3]
                     delta = np.r_[(new_p - old_p)[:2], 0.0]
                     print(f'Refine at approach: cube moved {np.round(delta*1000,1).tolist()} mm in base xy')
                     if np.linalg.norm(delta) < .06:
@@ -623,7 +593,7 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
                         print('Servo delta too large; giving up servo'); break
                     plan[:] = planner.refine(plan, delta, after='approach')
                     hover_rows = plan[i - 1]['joints_deg']  # recomputed hover stage (same index as current)
-                    move(hover_rows, stage['gripper'], False)
+                    move(hover_rows, stage['gripper'], False, 'hover-servo')
             if stage['stage'] == 'lift' and not c.get('auto'):
                 answer = input('Visually check: cube is securely lifted? Type yes to continue: ').strip().lower()
                 if answer != 'yes':
@@ -654,51 +624,33 @@ def main():
     p.add_argument('--output', type=Path, default=ROOT/'pick_place_output')
     p.add_argument('--locate-only', action='store_true')
     p.add_argument('--execute', action='store_true')
-    p.add_argument('--pick-only', action='store_true', help='Auto-select one marker, grasp and lift; no plate required')
+    p.add_argument('--pick-only', action='store_true', help='Detect the orange cube, grasp and lift; no tray required')
     p.add_argument('--teach-tcp', action='store_true')
-    p.add_argument('--scan-markers', action='store_true', help='Show detected IDs without connecting robot')
-    p.add_argument('--scan-color', action='store_true', help='Preview the colour mask (tune cube.hsv_ranges); no robot')
+    p.add_argument('--scan-color', action='store_true', help='Preview cube/tray detection and masks; no robot or calibration needed')
     p.add_argument('--teach-grasp-view', action='store_true', help='Hold the gripper centred just above the cube; records where the cube appears in the image')
     p.add_argument('--teach-tcp-click', action='store_true', help='Camera only: click the point between the fingertips; sets T_gripper_tcp translation')
     p.add_argument('--ignore-calibration-gate', action='store_true', help='Execute even if hand-eye consistency is poor (expect misses)')
     p.add_argument('--auto', action='store_true', help='No keypresses or confirmations: capture when still, run the plan straight through')
     a = p.parse_args()
-    if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers, a.scan_color, a.teach_grasp_view, a.teach_tcp_click]) > 1:
+    if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_color, a.teach_grasp_view, a.teach_tcp_click]) > 1:
         p.error('Choose only one mode')
     c = json.loads(a.config.read_text())
-    c['pick_only'] = a.pick_only
+    c['pick_only'] = a.pick_only or a.teach_grasp_view
     c['auto'] = a.auto
     a.output.mkdir(parents=True, exist_ok=True)
     if a.scan_color:
         cap = open_camera(c['camera'], 1280, 720)
-        state = {'hsv': None, 'click': None}
-        def on_mouse(ev, x, y, flags, _):
-            if ev == cv2.EVENT_LBUTTONDOWN and state['hsv'] is not None and x < state['hsv'].shape[1]:
-                patch = state['hsv'][max(0, y-4):y+5, max(0, x-4):x+5].reshape(-1, 3)
-                h, sat, val = np.median(patch, axis=0)
-                ranges = hsv_ranges_around(h, sat, val)
-                c['cube']['hsv_ranges'] = ranges; state['click'] = (x, y)
-                print(f'Picked HSV=({int(h)},{int(sat)},{int(val)}) -> hsv_ranges={ranges}. Press S to save, Q to quit.')
-        win = 'Colour mask: click the cube | S save | Q quit'
-        cv2.namedWindow(win); cv2.setMouseCallback(win, on_mouse)
         try:
             while True:
                 ok, frame = cap.read()
                 if not ok:
                     raise RuntimeError('Camera read failed')
-                state['hsv'] = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-                mask = np.zeros(frame.shape[:2], np.uint8)
-                for lo, hi in c['cube']['hsv_ranges']:
-                    mask |= cv2.inRange(state['hsv'], np.array(lo, np.uint8), np.array(hi, np.uint8))
-                if state['click']:
-                    cv2.circle(frame, state['click'], 8, (0, 255, 0), 2)
-                cv2.imshow(win, np.hstack([frame, cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)]))
-                key = cv2.waitKey(1) & 255
-                if key in (27, ord('q')):
+                _, view, debug = detect_objects(frame, c)
+                cv2.imshow('Cube / tray detection', view)
+                for role, details in debug.items():
+                    cv2.imshow(f'{role} mask', details['mask'])
+                if cv2.waitKey(1) & 255 in (27, ord('q')):
                     break
-                if key == ord('s'):
-                    saved = json.loads(a.config.read_text()); saved['cube']['hsv_ranges'] = c['cube']['hsv_ranges']
-                    save_json(a.config, saved); print('Saved hsv_ranges to', a.config)
         finally:
             cap.release(); cv2.destroyAllWindows()
         return
@@ -736,29 +688,11 @@ def main():
                     shift = new_grip - tcp[:3, 3]
                     saved = json.loads(a.config.read_text())
                     T = np.array(saved['T_gripper_tcp']); T[:3, 3] = new_grip
-                    saved['T_gripper_tcp'] = T.tolist(); saved['tcp_source'] = 'teach-tcp-click'; saved['tcp_status'] = f'clicked in image; shift from URDF {np.round(shift*1000,1).tolist()} mm'
+                    saved['T_gripper_tcp'] = T.tolist()
                     save_json(a.config, saved)
                     print(f'Saved T_gripper_tcp: moved {np.round(shift*1000,1).tolist()} mm in gripper frame; was pixel {p0}, now {state["click"]}')
         finally:
             cap.release(); cv2.destroyAllWindows()
-        return
-    if a.scan_markers:
-        cap = open_camera(c['camera'], 1280, 720)
-        detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, c['dictionary'])))
-        try:
-            while True:
-                ok, frame = cap.read()
-                if not ok:
-                    raise RuntimeError('Camera read failed')
-                corners, ids, _ = detector.detectMarkers(frame)
-                if ids is not None:
-                    cv2.aruco.drawDetectedMarkers(frame, corners, ids)
-                cv2.imshow('Marker IDs (Q quits)', frame)
-                if cv2.waitKey(1) & 255 in (27, ord('q')):
-                    break
-        finally:
-            cap.release()
-            cv2.destroyAllWindows()
         return
     handeye_path = ROOT/c['handeye_json']
     offsets = json.loads(handeye_path.read_text()).get('joint_offsets_deg') if handeye_path.exists() else None
@@ -768,7 +702,7 @@ def main():
             calibration_gate(json.loads(handeye_path.read_text()))
         elif a.execute:
             print('WARNING: calibration gate ignored; hand-eye error is cm-level, expect misses.')
-        check_config(c, planning=not a.locate_only)
+        check_config(c, planning=not (a.locate_only or a.teach_grasp_view))
         scene = Scene(c, fk)
     robot, cap = None, None
     try:
@@ -780,10 +714,11 @@ def main():
         if a.teach_grasp_view:
             cap = open_camera(c['camera'], *scene.size)
             print('Torque is OFF. Put the OPEN gripper centred over the cube, fingertips ~5 mm above its top. Hold still...')
-            pick_color_by_click(cap, c)
             pixels = []
             for _ in range(15):
                 ok, frame = cap.read()
+                if not ok:
+                    raise RuntimeError('Camera read failed')
                 q, _ = read_q(robot, scene.fk)
                 found, view = scene.detect(frame, q)
                 if 'cube' in found:
@@ -793,8 +728,7 @@ def main():
                 raise ValueError('Cube not detected reliably')
             px = np.median(pixels, axis=0).tolist()
             saved = json.loads(a.config.read_text())
-            saved['grasp_view'] = {'pixel': px, 'hover_mm': 15, 'joints_deg': q, 'hsv_ranges': c['cube']['hsv_ranges']}
-            saved['cube']['hsv_ranges'] = c['cube']['hsv_ranges']
+            saved['grasp_view'] = {'pixel': px, 'hover_mm': 15, 'joints_deg': q}
             save_json(a.config, saved)
             print(f'Saved grasp_view pixel {np.round(px)} to {a.config}')
             return
@@ -805,8 +739,6 @@ def main():
             robot.bus.enable_torque(num_retry=5)
             print('Torque ON: arm is holding itself. Let go, keep hands out of view, observing...')
             time.sleep(1)
-        if c.get('detector') == 'color':
-            pick_color_by_click(cap, c)
         obs = observe(cap, robot, scene, a.output)
         print(json.dumps(obs['targets'], indent=2))
         if a.locate_only:
@@ -826,8 +758,8 @@ def main():
         # Reject stale target positions after human review; plan must describe this observation.
         fresh = observe(cap, robot, scene, a.output/'recheck')
         for role in roles(c):
-            old = matrix(obs['targets'][role]['T_base_marker'])
-            new = matrix(fresh['targets'][role]['T_base_marker'])
+            old = matrix(obs['targets'][role]['T_base_object'])
+            new = matrix(fresh['targets'][role]['T_base_object'])
             if np.linalg.norm(old[:3, 3]-new[:3, 3]) > .02 or np.linalg.norm(cv2.Rodrigues(old[:3, :3].T @ new[:3, :3])[0]) > np.deg2rad(10):
                 raise ValueError('Scene changed; rerun observation and planning')
         execute(robot, planner, plan, obs, cap, a.output, scene)

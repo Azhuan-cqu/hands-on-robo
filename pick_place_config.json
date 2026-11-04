@@ -6,56 +6,53 @@
   "camera_yml": "intrinsic_output/camera.yml",
   "handeye_json": "handeye_output_v5/handeye.json",
   "urdf": "so101_new_calib.urdf",
-  "dictionary": "DICT_4X4_50",
   "cube": {
-    "id": null,
-    "marker_mm": 18,
     "side_mm": 25,
-    "grasp_depth_mm": 12,
-    "hsv_ranges": [
-      [
-        [
-          0,
-          120,
-          70
-        ],
-        [
-          10,
-          255,
-          255
-        ]
-      ],
-      [
-        [
-          170,
-          120,
-          70
-        ],
-        [
-          180,
-          255,
-          255
-        ]
-      ]
+    "grasp_depth_mm": 10,
+    "min_area_px": 400,
+    "hsv_low": [
+      0,
+      80,
+      50
     ],
-    "min_area_px": 400
+    "hsv_high": [
+      25,
+      255,
+      255
+    ],
+    "canny_low": 15,
+    "canny_high": 40
   },
   "plate": {
-    "id": null,
-    "marker_mm": null,
-    "rim_height_mm": null,
-    "inner_half_size_mm": null,
+    "rim_height_mm": 0,
+    "inner_half_size_mm": [
+      45,
+      45
+    ],
     "drop_offset_mm": [
       0,
       0,
       0
     ],
-    "outer_half_size_mm": null,
-    "reported_size_mm": [
-      1000,
-      1000
+    "outer_half_size_mm": [
+      50,
+      50
     ],
-    "reported_size_note": "User stated 100 cm x 100 cm; inner/outer boundary not specified."
+    "hsv_low": [
+      90,
+      70,
+      40
+    ],
+    "hsv_high": [
+      135,
+      255,
+      255
+    ],
+    "min_area_px": 400,
+    "canny_low": 15,
+    "canny_high": 40,
+    "surface_height_mm": 0,
+    "floor_height_mm": 0
   },
   "T_gripper_tcp": [
     [
@@ -102,15 +99,10 @@
   "speed_deg_s": 15,
   "tool_radius_mm": 15,
   "tcp_lowest_extent_mm": 10,
-  "tcp_source": "fingers centre from descend screenshot",
-  "tcp_status": "shift from URDF [2.0, 12.0, -5.8] mm (gripper frame); manual nudge image-right 8 mm, down 5 mm = gripper [8.2, -4.0, 2.2] mm; +6 mm image-right = gripper [6.0, 0.3, 0.0] mm; +6 mm image-right = gripper [6.0, 0.3, 0.0] mm",
   "pick_offset_mm": [
     0,
     0,
     -18
   ],
-  "pick_offset_note": "base frame, mm: [x forward from base, y, z up]; added to the grasp point",
-  "detector": "aruco",
-  "detector_note": "'aruco' (marker on cube) or 'color' (cube.hsv_ranges, --pick-only only)",
   "refine_at_approach": true
 }
