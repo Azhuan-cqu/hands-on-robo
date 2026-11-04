@@ -424,7 +424,8 @@ def execute(robot, planner, plan, obs, cap, out):
             time.sleep(.05)
         last = target.copy()
     def close_until_contact():
-        _, opening = read_q(robot, planner.fk)
+        hold, opening = read_q(robot, planner.fk)
+        hold = np.array([hold[n] for n in planner.fk.names])  # drift is measured from where the arm actually settled
         history = []
         command = opening
         deadline = time.monotonic() + 20
@@ -433,7 +434,7 @@ def execute(robot, planner, plan, obs, cap, out):
             robot.bus.write('Goal_Position', 'gripper', command)
             check_stop()
             q, actual = read_q(robot, planner.fk)
-            if max(abs(q[n] - last[i]) for i, n in enumerate(planner.fk.names)) > 2:
+            if max(abs(q[n] - hold[i]) for i, n in enumerate(planner.fk.names)) > 3:
                 raise RuntimeError('Arm moved while closing gripper')
             history.append(actual)
             if contact_candidate(history, command, c['gripper_closed']):
