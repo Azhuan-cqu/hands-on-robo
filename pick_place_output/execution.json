@@ -2,46 +2,41 @@
   "status": "aborted",
   "events": [
     {
-      "time": 1793752638.02662,
+      "time": 1793752988.193418,
       "stage": "align",
       "measured": {
-        "shoulder_pan": -5.0989010989010985,
-        "shoulder_lift": 2.5494505494505493,
-        "elbow_flex": -10.417582417582418,
-        "wrist_flex": 97.45054945054945,
-        "wrist_roll": -165.58241758241758,
+        "shoulder_pan": -4.923076923076923,
+        "shoulder_lift": 36.30769230769231,
+        "elbow_flex": -60.175824175824175,
+        "wrist_flex": 101.58241758241758,
+        "wrist_roll": -138.5934065934066,
         "gripper": 89.25950633755836
       }
     },
     {
-      "time": 1793752646.34099,
+      "time": 1793752990.306515,
       "stage": "approach",
       "measured": {
-        "shoulder_pan": -5.010989010989011,
-        "shoulder_lift": 48.0,
-        "elbow_flex": -66.94505494505495,
-        "wrist_flex": 97.45054945054945,
-        "wrist_roll": -165.67032967032966,
+        "shoulder_pan": -3.868131868131868,
+        "shoulder_lift": 50.285714285714285,
+        "elbow_flex": -71.16483516483517,
+        "wrist_flex": 101.58241758241758,
+        "wrist_roll": -137.45054945054946,
         "gripper": 89.25950633755836
       }
     },
     {
-      "time": 1793752648.421351,
+      "time": 1793752992.2867148,
       "stage": "descend",
       "measured": {
-        "shoulder_pan": -5.010989010989011,
-        "shoulder_lift": 63.64835164835165,
-        "elbow_flex": -71.16483516483517,
-        "wrist_flex": 94.46153846153847,
-        "wrist_roll": -165.67032967032966,
+        "shoulder_pan": -3.868131868131868,
+        "shoulder_lift": 63.91208791208791,
+        "elbow_flex": -71.34065934065934,
+        "wrist_flex": 96.21978021978022,
+        "wrist_roll": -136.92307692307693,
         "gripper": 89.25950633755836
       }
-    },
-    {
-      "time": 1793752666.2609768,
-      "stage": "empty_grasp",
-      "measured_opening": 1.6010673782521683
     }
   ],
-  "reason": "Gripper reached closed endpoint: possible empty grasp; no lift"
+  "reason": "KeyboardInterrupt"
 }

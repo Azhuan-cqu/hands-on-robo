@@ -350,6 +350,30 @@ class Planner:
         if np.any(tcp < self.c['workspace_min_m']) or np.any(tcp > self.c['workspace_max_m']):
             raise ValueError('TCP outside measured workspace')
 
+    def segment(self, prev, target, q):
+        """Straight-line TCP motion prev->target as a list of joint waypoints, starting from joints q."""
+        angle = cv2.Rodrigues(prev[:3, :3].T @ target[:3, :3])[0].ravel()
+        count = max(1, int(np.ceil(np.linalg.norm(target[:3, 3]-prev[:3, 3])/.005)), int(np.ceil(np.linalg.norm(angle)/.05)))
+        rows = []
+        for u in np.linspace(0, 1, count+1)[1:]:
+            goal = transform(prev[:3, :3] @ cv2.Rodrigues(angle*u)[0], (1-u)*prev[:3, 3]+u*target[:3, 3])
+            q = self.ik(goal, q)
+            self.clearance(q)
+            rows.append(q.tolist())
+        return rows, q
+
+    def refine(self, plan, delta):
+        """Shift every stage after 'approach' by delta (base frame, m) and recompute its joint path."""
+        idx = next(i for i, s in enumerate(plan) if s['stage'] == 'approach')
+        q = np.array(plan[idx]['joints_deg'][-1]); prev = np.array(plan[idx]['T_base_tcp'])
+        out = plan[:idx + 1]
+        for s in plan[idx + 1:]:
+            target = np.array(s['T_base_tcp']); target[:3, 3] += delta
+            rows, q = self.segment(prev, target, q)
+            out.append(dict(s, joints_deg=rows, T_base_tcp=target.tolist()))
+            prev = target
+        return out
+
     def plan(self, obs):
         c = self.c
         cube = matrix(obs['targets']['cube']['T_base_marker'])
@@ -402,14 +426,7 @@ class Planner:
             q, prev, rows = q0.copy(), start.copy(), []
             try:
                 for name, target, grip in targets:
-                    angle = cv2.Rodrigues(prev[:3, :3].T @ target[:3, :3])[0].ravel()
-                    count = max(1, int(np.ceil(np.linalg.norm(target[:3, 3]-prev[:3, 3])/.005)), int(np.ceil(np.linalg.norm(angle)/.05)))
-                    segment = []
-                    for u in np.linspace(0, 1, count+1)[1:]:
-                        goal = transform(prev[:3, :3] @ cv2.Rodrigues(angle*u)[0], (1-u)*prev[:3, 3]+u*target[:3, 3])
-                        q = self.ik(goal, q)
-                        self.clearance(q)
-                        segment.append(q.tolist())
+                    segment, q = self.segment(prev, target, q)
                     rows.append({'stage': name, 'joints_deg': segment, 'gripper': c['gripper_'+grip], 'T_base_tcp': target.tolist()})
                     prev = target
                 candidates.append((sum(np.linalg.norm(np.diff(np.vstack([q0]+[q for s in rows for q in s['joints_deg']]), axis=0), axis=1)), rows))
@@ -458,7 +475,7 @@ def teach(robot, fk, out):
         print('Recorded', len(poses))
 
 
-def execute(robot, planner, plan, obs, cap, out):
+def execute(robot, planner, plan, obs, cap, out, scene=None):
     c = planner.c
     log = {'status': 'running', 'events': []}
     last = np.array([obs['joints_deg'][n] for n in planner.fk.names])
@@ -543,7 +560,9 @@ def execute(robot, planner, plan, obs, cap, out):
         robot.bus.sync_write('Goal_Position', current | {'gripper': grip})
         robot.bus.enable_torque(num_retry=5)
         held_grip = None
-        for stage in plan:
+        i = 0
+        while i < len(plan):
+            stage = plan[i]; i += 1
             if c.get('pick_only') and stage['stage'] == 'grasp':
                 held_grip = close_until_contact()
                 event('grasp', measured=robot.bus.sync_read('Present_Position'))
@@ -551,6 +570,28 @@ def execute(robot, planner, plan, obs, cap, out):
             grip_command = held_grip if c.get('pick_only') and stage['stage'] == 'lift' else stage['gripper']
             move(stage['joints_deg'], grip_command, stage['stage'] in ('grasp', 'lift', 'transfer', 'place'))
             event(stage['stage'], measured=robot.bus.sync_read('Present_Position'))
+            if stage['stage'] == 'approach' and scene is not None and c.get('refine_at_approach', True):
+                # Closed-loop correction: the camera is now ~10 cm from the cube, so hand-eye rotation error matters far less.
+                time.sleep(.5)
+                for _ in range(5):
+                    check_stop()
+                q_now, _ = read_q(robot, planner.fk)
+                found, _ = scene.detect(frame_last, q_now)
+                if 'cube' in found:
+                    old_p = np.array(obs['targets']['cube']['T_base_marker'])[:3, 3]
+                    new_p = np.array(found['cube']['T_base_marker'])[:3, 3]
+                    delta = np.r_[(new_p - old_p)[:2], 0.0]
+                    print(f'Refine at approach: cube moved {np.round(delta*1000,1).tolist()} mm in base xy')
+                    if np.linalg.norm(delta) < .06:
+                        try:
+                            plan[:] = planner.refine(plan, delta)
+                            event('refine', delta_mm=(delta*1000).tolist())
+                        except ValueError as e:
+                            print('Refine failed, keeping original plan:', e)
+                    else:
+                        print('Refine delta too large; keeping original plan')
+                else:
+                    print('Refine: cube not seen from approach pose; keeping original plan')
             if stage['stage'] == 'lift' and not c.get('auto'):
                 answer = input('Visually check: cube is securely lifted? Type yes to continue: ').strip().lower()
                 if answer != 'yes':
@@ -694,7 +735,7 @@ def main():
             new = matrix(fresh['targets'][role]['T_base_marker'])
             if np.linalg.norm(old[:3, 3]-new[:3, 3]) > .01 or np.linalg.norm(cv2.Rodrigues(old[:3, :3].T @ new[:3, :3])[0]) > np.deg2rad(6):
                 raise ValueError('Scene changed; rerun observation and planning')
-        execute(robot, planner, plan, obs, cap, a.output)
+        execute(robot, planner, plan, obs, cap, a.output, scene)
     finally:
         if cap is not None:
             cap.release()
