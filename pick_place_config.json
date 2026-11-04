@@ -72,7 +72,7 @@
   "clearance_m": 0.05,
   "link_radius_m": 0.035,
   "release_gap_mm": 3,
-  "speed_deg_s": 8,
+  "speed_deg_s": 15,
   "tool_radius_mm": 15,
   "tcp_lowest_extent_mm": 10,
   "tcp_source": "so101_new_calib.urdf:gripper_frame_joint",
