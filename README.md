@@ -32,15 +32,32 @@ uv run python pick_place.py --teach-tcp-click
 ## 4. 抓取
 
 ```bash
-uv run python pick_place.py --pick-only --execute --ignore-calibration-gate --auto
+uv run python pick_place.py --pick-only --execute --auto
 ```
 
-方块顶面贴 18 mm ArUco 码（DICT_4X4_50），画面里只有这一个码。全自动：定位 → 规划 → 对齐 → 接近（近距离再识别修正）→ 下降 → 闭合 → 抬起。
-Q 或 Ctrl-C 停止，臂保持当前位置；要用手挪臂先托住再 `uv run python release_torque.py`。
+方块顶面贴 18 mm ArUco 码（DICT_4X4_50）。`cube.id` 留空时，画面里应只有一个候选标签；多个标签可见时指定 ID。
 
-`detector` 改成 `"color"` 则不用贴码：启动后在画面里点一下要抓的方块。
+首次启动默认空夹爪，正常流程检测 cube 和 tray；`--pick-only` 只检测 cube。完整抓放需补齐盘子配置后去掉 `--pick-only`。
 
-## 排查
+`detector` 改成 `"color"` 可点击选择方块颜色，目前仅支持只抓取模式。Q/ESC 或 Ctrl-C 停止，并尝试保持当前姿态和夹持。
 
-- `joint_vs_camera_test.py --joint elbow_flex --delta 6`：舵机自己转一个关节，比较编码器和相机看到的角度，判断关节/相机/采样方式哪个有问题。
-- 详细参数说明见 [PICK_PLACE.md](PICK_PLACE.md)。
+## 当前实现的 retry 策略
+
+| 情况 | 判定 | 处理方式 |
+|---|---|---|
+| 没识别到 cube / tray tag | 目标缺失或位姿无效 | 高位依次在原位、wrist +12°、−12°重新检测，最多 3 批；路径检查失败或仍识别不到就停。 |
+| 下抓前定位不稳定 | 5 帧位置偏差 >5 mm、姿态变化 >5°、关节变化 >0.3°，或 cube 相比 approach 移动 >5 mm | 先原地重新采样，再竖直回撤、重新定位和规划；默认允许一次重新规划，再失败就停。 |
+| 明确空抓 | 未检测到稳定接触，夹爪已接近闭合终点 | 闭合状态回撤 → 高位张开 → 重新识别和规划 → 再抓；总共最多 3 次抓取。 |
+| 闭合状态不明 | 20 秒无稳定接触、手臂偏移 >3°，或人工否认抓住 | 停止，不自动松爪重抓。 |
+| 抓起后移动失败 | 跟踪误差 >8°或运动未收敛 | 保持当前姿态和夹持命令，不松爪、不从头抓。 |
+| 持物或异常后重启 | 保存状态为 `holding` / `unknown` | 阻止默认空夹爪流程；检查实物后才能恢复。有效持物记录可通过恢复入口重新观察 tray、规划并放下。 |
+
+确认持物后恢复放置（需有效持物记录及完整盘子配置）：
+
+```bash
+uv run python pick_place.py --execute --recover-place --startup-state holding
+```
+
+重试参数在 `pick_place_config.json` 的 `retry` 中。接触判定不等于确认抓住，当前尚无自动持物/掉落/放置结果视觉验证；重抓时盘子应保持固定。
+
+详细参数、日志和测试说明见 [PICK_PLACE.md](PICK_PLACE.md)。

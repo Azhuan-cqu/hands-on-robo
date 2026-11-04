@@ -112,5 +112,14 @@
   "pick_offset_note": "base frame, mm: [x forward from base, y, z up]; added to the grasp point",
   "detector": "aruco",
   "detector_note": "'aruco' (marker on cube) or 'color' (cube.hsv_ranges, --pick-only only)",
-  "refine_at_approach": true
+  "refine_at_approach": true,
+  "retry": {
+    "observation_attempts": 3,
+    "stable_frames": 5,
+    "position_mm": 5,
+    "orientation_deg": 5,
+    "wrist_scan_deg": 12,
+    "grasp_attempts": 3,
+    "pregrasp_attempts": 2
+  }
 }

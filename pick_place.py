@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """SO101 marker-based pick/place. Default: observe and plan, no motor commands."""
 import argparse
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -9,6 +10,8 @@ import numpy as np
 from scipy.optimize import least_squares
 from camera_intrinsic import open_camera, save_json, reprojection
 from handeye_calibration import URDFFK, robot_reader, transform
+
+from grasp_state import GraspState, startup_decision
 
 ROOT = Path(__file__).resolve().parent
 
@@ -41,10 +44,21 @@ def matrix(value):
 
 
 def roles(c):
+    if c.get('recover_place'):
+        return ('plate',)
     return ('cube',) if c.get('pick_only') else ('cube', 'plate')
 
 
 def check_config(c, planning=True):
+    retry = retry_settings(c)
+    for key in ('observation_attempts', 'stable_frames', 'grasp_attempts', 'pregrasp_attempts'):
+        if type(retry[key]) is not int or not 1 <= retry[key] <= 10:
+            raise ValueError(f'Invalid retry.{key}: expected integer 1..10')
+    if retry['stable_frames'] < 3:
+        raise ValueError('Need at least 3 stable frames')
+    for key, maximum in (('position_mm', 15), ('orientation_deg', 10), ('wrist_scan_deg', 20)):
+        if not np.isfinite(retry[key]) or not 0 < retry[key] <= maximum:
+            raise ValueError(f'Invalid retry.{key}')
     if c.get('detector') == 'color':
         if not c.get('pick_only'):
             raise ValueError('Color detector currently supports --pick-only (no plate marker)')
@@ -186,7 +200,7 @@ class Scene:
             for role in roles(self.c):
                 target_id = self.c[role]['id']
                 if self.c.get('pick_only'):
-                    self.selected_id = select_marker(ids, self.selected_id)
+                    self.selected_id = select_marker(ids[ids != self.c.get('plate', {}).get('id')], self.selected_id)
                     target_id = self.selected_id
                 indices = np.flatnonzero(ids.ravel() == target_id)
                 if len(indices) != 1:
@@ -194,7 +208,8 @@ class Scene:
                 T_base_cam = self.fk(q) @ self.X
                 error, C = marker_pose(corners[indices[0]], self.c[role]['marker_mm'] / 1000, self.K, self.D, up_hint=T_base_cam[:3, :3].T @ [0, 0, 1])
                 B = T_base_cam @ C
-                found[role] = {'T_base_marker': B.tolist(), 'T_camera_marker': C.tolist(), 'id': int(target_id), 'rms_px': error}
+                found[role] = {'T_base_marker': B.tolist(), 'T_camera_marker': C.tolist(), 'id': int(target_id), 'rms_px': error,
+                               'pixel': np.asarray(corners[indices[0]]).reshape(4, 2).mean(axis=0).tolist()}
                 r = cv2.Rodrigues(C[:3, :3])[0]
                 cv2.drawFrameAxes(view, self.K, self.D, r, C[:3, 3], .025)
         return found, view
@@ -236,54 +251,130 @@ def read_q(robot, fk):
     return {n: float(values[n]) for n in fk.names}, float(values['gripper'])
 
 
-def observe(cap, robot, scene, output):
-    output.mkdir(parents=True, exist_ok=True)
-    print('Hold still with target marker(s) visible. SPACE capture, Q/ESC cancel.')
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            raise RuntimeError('Camera read failed')
-        cv2.imshow('Pick/place', frame)
-        key = cv2.waitKey(1) & 255
-        if key in (27, ord('q')):
-            raise KeyboardInterrupt
-        if key != 32 and not scene.c.get('auto'):
+class ObservationRejected(ValueError):
+    pass
+
+
+class EmptyGrasp(RuntimeError):
+    pass
+
+
+class MotionFailure(RuntimeError):
+    pass
+
+
+def retry_settings(c):
+    defaults = dict(observation_attempts=3, stable_frames=5, position_mm=5,
+                    orientation_deg=5, wrist_scan_deg=12, grasp_attempts=3,
+                    pregrasp_attempts=2)
+    return defaults | c.get('retry', {})
+
+
+def stable_observation(cap, robot, scene, required=None, stop=None):
+    """Flush buffered images; require a stationary arm and consistent base-frame poses."""
+    required = roles(scene.c) if required is None else required
+    cfg = retry_settings(scene.c)
+    readings, detections = [], []
+    for i in range(5 + cfg['stable_frames']):
+        q0, _ = read_q(robot, scene.fk)
+        if stop is None:
+            ok, frame = cap.read()
+            if not ok:
+                raise RuntimeError('Camera read failed')
+            cv2.imshow('Pick/place', frame)
+            if cv2.waitKey(1) & 255 in (27, ord('q')):
+                raise KeyboardInterrupt
+        else:
+            frame = stop()
+        q1, grip = read_q(robot, scene.fk)
+        if i < 5:
             continue
-        readings, detections = [], []
+        readings.extend([list(q0.values()), list(q1.values())])
+        q = {n: (q0[n] + q1[n]) / 2 for n in q0}
         try:
-            for i in range(10):
-                q0, _ = read_q(robot, scene.fk)
-                ok, frame = cap.read()
-                if not ok:
-                    raise RuntimeError('Camera read failed')
-                q1, grip = read_q(robot, scene.fk)
-                readings.extend([list(q0.values()), list(q1.values())])
-                if i < 5:
-                    continue  # discard buffered frames
-                q = {n: (q0[n] + q1[n]) / 2 for n in q0}
-                found, view = scene.detect(frame, q)
-                if len(found) != len(roles(scene.c)):
-                    raise ValueError('Required target marker(s) must be visible')
-                cv2.imshow('Pick/place', view)
-                cv2.waitKey(1)
-                detections.append(found)
-            if np.max(np.ptp(readings, axis=0)) > .3:
-                raise ValueError('Robot moved during observation')
-            for role in roles(scene.c):
-                poses = np.array([d[role]['T_base_marker'] for d in detections])
-                if np.max(np.linalg.norm(poses[:, :3, 3] - poses[-1, :3, 3], axis=1)) > .015:
-                    raise ValueError('Target position unstable by >15 mm')
-                if any(np.linalg.norm(cv2.Rodrigues(poses[-1, :3, :3].T @ R)[0]) > np.deg2rad(10) for R in poses[:, :3, :3]):
-                    raise ValueError('Target orientation unstable by >10 deg')
-            record = {'time': time.time(), 'joints_deg': q, 'gripper': grip, 'targets': detections[-1]}
+            found, _ = scene.detect(frame, q)
+        except ValueError as error:
+            # Only target selection / pose ambiguity is recoverable; bad camera config is not.
+            if 'resolution' in str(error):
+                raise
+            raise ObservationRejected(str(error)) from error
+        if any(role not in found for role in required):
+            raise ObservationRejected('Required target missing: ' + ', '.join(required))
+        detections.append(found)
+    if np.max(np.ptp(readings, axis=0)) > .3:
+        raise ObservationRejected('Robot moved during observation (>0.3 deg)')
+    result = dict(detections[-1])
+    for role in required:
+        poses = np.array([d[role]['T_base_marker'] for d in detections])
+        if not np.isfinite(poses).all():
+            raise ObservationRejected('Non-finite target pose')
+        centre = np.median(poses[:, :3, 3], axis=0)
+        if np.max(np.linalg.norm(poses[:, :3, 3] - centre, axis=1))*1000 > cfg['position_mm']:
+            raise ObservationRejected('Target position unstable')
+        if any(np.linalg.norm(cv2.Rodrigues(poses[-1, :3, :3].T @ R)[0]) > np.deg2rad(cfg['orientation_deg']) for R in poses[:, :3, :3]):
+            raise ObservationRejected('Target orientation unstable')
+        T = poses[-1].copy(); T[:3, 3] = centre
+        result[role] = dict(result[role], T_base_marker=T.tolist())
+    return {'time': time.time(), 'joints_deg': q, 'gripper': grip, 'targets': result}, frame
+
+
+def observe(cap, robot, scene, output, scan=None, required=None, stop=None):
+    output.mkdir(parents=True, exist_ok=True)
+    if not scene.c.get('auto'):
+        print('SPACE capture, Q/ESC cancel.')
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                raise RuntimeError('Camera read failed')
+            cv2.imshow('Pick/place', frame)
+            key = cv2.waitKey(1) & 255
+            if key in (27, ord('q')):
+                raise KeyboardInterrupt
+            if key == 32:
+                break
+    failures = []
+    for attempt in range(retry_settings(scene.c)['observation_attempts']):
+        try:
+            record, frame = stable_observation(cap, robot, scene, required, stop)
             save_json(output / 'observation.json', record)
             if not cv2.imwrite(str(output / 'observation.png'), frame):
                 raise IOError('Image save failed')
             return record
-        except ValueError as e:
-            print('Capture rejected:', e)
-            if scene.c.get('auto'):
-                time.sleep(1)
+        except ObservationRejected as error:
+            failures.append(str(error))
+            save_json(output / 'observation_retries.json', {'failures': failures})
+            print(f'Observation {attempt+1} rejected: {error}')
+            if attempt + 1 < retry_settings(scene.c)['observation_attempts']:
+                if scan is not None:
+                    scan(attempt)
+                time.sleep(.3)
+    raise ObservationRejected('Observation retries exhausted: ' + '; '.join(failures))
+
+
+def wrist_search(robot, planner, origin, attempt, poll):
+    """Small absolute wrist offsets; preflight the whole joint path before issuing commands."""
+    c = planner.c
+    q, grip = read_q(robot, planner.fk)
+    start = np.array([q[n] for n in planner.fk.names])
+    target = np.array([origin[n] for n in planner.fk.names])
+    target[planner.fk.names.index('wrist_roll')] += (1 if attempt % 2 == 0 else -1) * retry_settings(c)['wrist_scan_deg']
+    rows = np.linspace(start, target, max(2, int(np.ceil(np.max(np.abs(target-start))/.5))+1))
+    for row in rows:
+        planner.clearance(row)
+        if planner.tcp(row)[2, 3] < c['table_z_m'] + c['cube']['side_mm']/1000 + c['clearance_m']:
+            raise ValueError('Wrist search needs a high observation pose')
+    try:
+        for row in rows[1:]:
+            poll()
+            robot.bus.sync_write('Goal_Position', dict(zip(planner.fk.names, row)) | {'gripper': grip})
+            time.sleep(.1)  # <=5 deg/s
+            measured, _ = read_q(robot, planner.fk)
+            if max(abs(measured[n]-row[i]) for i, n in enumerate(planner.fk.names)) > 4:
+                raise MotionFailure('Wrist search tracking error >4 deg')
+        time.sleep(.3)
+    except BaseException:
+        robot.bus.sync_write('Goal_Position', robot.bus.sync_read('Present_Position'))
+        raise
 
 
 class Planner:
@@ -360,12 +451,14 @@ class Planner:
         return rows, q
 
     def refine(self, plan, delta, after='approach'):
-        """Shift every stage after `after` by delta (base frame, m) and recompute its joint path."""
+        """Correct cube stages only; preserve the independently observed tray destination."""
         idx = next(i for i, s in enumerate(plan) if s['stage'] == after)
         q = np.array(plan[idx]['joints_deg'][-1]); prev = np.array(plan[idx]['T_base_tcp'])
         out = plan[:idx + 1]
         for s in plan[idx + 1:]:
-            target = np.array(s['T_base_tcp']); target[:3, 3] += delta
+            target = np.array(s['T_base_tcp'])
+            if s['stage'] in ('hover', 'descend', 'grasp', 'lift'):
+                target[:3, 3] += delta
             rows, q = self.segment(prev, target, q)
             out.append(dict(s, joints_deg=rows, T_base_tcp=target.tolist()))
             prev = target
@@ -472,11 +565,64 @@ def teach(robot, fk, out):
         print('Recorded', len(poses))
 
 
-def execute(robot, planner, plan, obs, cap, out, scene=None):
+def recovery_context(c):
+    # Tray dimensions may be filled before recovery; grasp geometry must stay unchanged.
+    keys = ('robot_id', 'port', 'calibration_dir', 'T_gripper_tcp', 'table_z_m',
+            'cube', 'gripper_open', 'gripper_closed', 'tcp_lowest_extent_mm')
+    data = {key: c.get(key) for key in keys}
+    for key in ('urdf', 'handeye_json'):
+        data[key] = (ROOT / c[key]).read_text()
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+def validate_recovery_feedback(robot, fk, c, recovery):
+    q, opening = read_q(robot, fk)
+    command = float(recovery['held_command'])
+    saved_opening = float(recovery['opening'])
+    if (not np.isfinite([command, opening, saved_opening, *q.values()]).all()
+            or not c['gripper_closed'] <= command < c['gripper_open']
+            or opening <= c['gripper_closed'] + 5 or abs(opening-saved_opening) > 5):
+        raise ValueError('Gripper feedback differs from saved grasp; recovery blocked')
+    torque = robot.bus.sync_read('Torque_Enable')
+    if any(torque.get(n) != 1 for n in [*fk.names, 'gripper']):
+        raise ValueError('Recovery requires torque already enabled; support and inspect the arm')
+
+
+def recovery_plan(planner, obs):
+    """Fresh measured start -> vertical lift -> tray -> descend -> release -> retract."""
+    c = planner.c
+    planner.plate = matrix(obs['targets']['plate']['T_base_marker'])
+    q = np.array([obs['joints_deg'][n] for n in planner.fk.names])
+    planner.clearance(q)
+    start = planner.tcp(q)
+    drop = start.copy()
+    drop[:3, 3] = (planner.plate @ np.r_[np.array(c['plate']['drop_offset_mm'])/1000, 1])[:3]
+    drop[2, 3] += (c['cube']['side_mm']-c['cube']['grasp_depth_mm']+c['release_gap_mm'])/1000
+    high = start.copy()
+    high[2, 3] = max(start[2, 3], drop[2, 3], planner.plate[2, 3] +
+                    c['plate']['rim_height_mm']/1000 + c['clearance_m'] +
+                    max(c['tcp_lowest_extent_mm'], c['cube']['side_mm'])/1000)
+    above = drop.copy(); above[2, 3] = high[2, 3]
+    plan, prev = [], start
+    for name, target in [('lift', high), ('transfer', above), ('place', drop), ('release', drop), ('retract', above)]:
+        rows, q = planner.segment(prev, target, q)
+        plan.append(dict(stage=name, joints_deg=rows, T_base_tcp=target.tolist(),
+                         gripper=c['gripper_open'] if name in ('release','retract') else c['gripper_closed']))
+        prev = target
+    return plan
+
+
+def execute(robot, planner, plan, obs, cap, out, scene=None, state_store=None, recovery=None):
     c = planner.c
     log = {'status': 'running', 'events': []}
     last = np.array([obs['joints_deg'][n] for n in planner.fk.names])
     frame_last = None
+    held_grip = recovery['held_command'] if recovery else None
+    def journal(state, **details):
+        if state_store is not None:
+            state_store.write(state, context=recovery_context(c), **details)
+    grasp_attempt = 0
+    pregrasp_retries = 0
     def event(stage, **kw):
         log['events'].append({'time': time.time(), 'stage': stage, **kw})
         save_json(out / 'execution.json', log)
@@ -491,6 +637,7 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
         cv2.imshow('Pick/place', frame)
         if cv2.waitKey(1) & 255 in (27, ord('q')):
             raise KeyboardInterrupt
+        return frame
     def move(path, grip, allow_gripper_contact=False):
         """One continuous smooth motion through all waypoints of a stage; settle only at the end."""
         nonlocal last
@@ -505,11 +652,11 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
             s = 3*u*u-2*u*u*u
             cmd = target.copy() if cum[-1] == 0 else np.array([np.interp(s*cum[-1], cum, pts[:, i]) for i in range(pts.shape[1])])
             planner.clearance(cmd)
-            robot.bus.sync_write('Goal_Position', dict(zip(planner.fk.names, cmd)) | {'gripper': oldgrip+(grip-oldgrip)*s})
+            robot.bus.sync_write('Goal_Position', dict(zip(planner.fk.names, cmd)) | {'gripper': grip if held_grip is not None and allow_gripper_contact else oldgrip+(grip-oldgrip)*s})
             check_stop()
             measured, _ = read_q(robot, planner.fk)
             if max(abs(measured[n]-cmd[i]) for i, n in enumerate(planner.fk.names)) > 8:
-                raise RuntimeError('Joint tracking error >8 deg')
+                raise MotionFailure('Joint tracking error >8 deg')
             time.sleep(duration/steps)
         deadline = time.monotonic()+3
         boosts, boosted = 0, target.copy()
@@ -529,11 +676,13 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
                 break
             if time.monotonic() > deadline:
                 diff = {n: round(measured[n]-target[i], 1) for i, n in enumerate(planner.fk.names)} | {'gripper': round(measured_grip-grip, 1)}
-                raise RuntimeError(f'Motion failed to settle; measured-target = {diff}')
+                raise MotionFailure(f'Motion failed to settle; measured-target = {diff}')
             check_stop()
             time.sleep(.05)
         last = target.copy()
     def close_until_contact():
+        nonlocal held_grip
+        journal('unknown', reason='closing_gripper')
         hold, opening = read_q(robot, planner.fk)
         hold = np.array([hold[n] for n in planner.fk.names])  # drift is measured from where the arm actually settled
         history = []
@@ -549,97 +698,165 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
             history.append(actual)
             if contact_candidate(history, command, c['gripper_closed']):
                 # Keep the small current position error; do not continue squeezing to zero.
+                held_grip = command
+                journal('holding', held_command=command, opening=actual)
                 event('possible_contact', measured_opening=actual, held_command=command)
                 if not c.get('auto') and input('Possible contact detected. Is the object visibly between both fingers? Type yes to lift: ').strip().lower() != 'yes':
                     raise RuntimeError('Grasp not visually confirmed; no lift')
                 return command
             if actual <= c['gripper_closed'] + 2:
+                journal('empty', reason='closed_endpoint_empty_grasp')
                 event('empty_grasp', measured_opening=actual)
-                raise RuntimeError('Gripper reached closed endpoint: possible empty grasp; no lift')
+                raise EmptyGrasp('Gripper reached closed endpoint: possible empty grasp; no lift')
             time.sleep(.05)
         raise RuntimeError('No stable contact before timeout; no lift')
+
+    def cube_observation(label, scan=False):
+        origin, grip = read_q(robot, planner.fk)
+        def search(attempt):
+            event('wrist_search', attempt=attempt+1, context=label)
+            wrist_search(robot, planner, origin, attempt, check_stop)
+        result = observe(cap, robot, scene, out / label, scan=search if scan else None,
+                         required=('cube',), stop=check_stop)
+        if scan:
+            # Subsequent stage paths assume the original orientation. Restore after search.
+            q, _ = read_q(robot, planner.fk)
+            if max(abs(q[n]-origin[n]) for n in q) > .3:
+                rows = np.linspace([q[n] for n in planner.fk.names], [origin[n] for n in planner.fk.names], 50)
+                for row in rows:
+                    planner.clearance(row)
+                move(rows.tolist(), grip)
+        return result
+
+    def retreat_and_replan(retry):
+        nonlocal obs, last
+        q, grip = read_q(robot, planner.fk)
+        seed = np.array([q[n] for n in planner.fk.names])
+        start = planner.tcp(seed)
+        high = start.copy()
+        high[2, 3] = max(start[2, 3], next(np.array(s['T_base_tcp'])[2, 3] for s in plan if s['stage'] == 'approach'))
+        rows, _ = planner.segment(start, high, seed)
+        move(rows, grip, True)
+        event('retry_retreat')
+        if not retry:
+            raise RuntimeError('Retry limit reached; stopped at high pose')
+        if scene is None:
+            raise RuntimeError('Cannot retry grasp without fresh vision')
+        q, _ = read_q(robot, planner.fk)
+        move([[q[n] for n in planner.fk.names]], c['gripper_open'])
+        fresh = cube_observation('retry_cube', scan=True)
+        # Keep the original destination; only the cube is reacquired.
+        q, grip = read_q(robot, planner.fk)
+        obs = dict(fresh, joints_deg=q, gripper=grip,
+                   targets=obs['targets'] | {'cube': fresh['targets']['cube']})
+        plan[:] = planner.plan(obs)
+        save_json(out / 'retry_plan.json', {'observation': obs, 'stages': plan})
 
     try:
         current, grip = read_q(robot, planner.fk)
         if max(abs(current[n]-obs['joints_deg'][n]) for n in current) > .5:
             raise ValueError('Robot changed after observation; observe again')
         # Existing calibrated LeRobot controller setup; caller must support arm during configure.
-        robot.configure()
-        robot.bus.sync_write('Goal_Position', current | {'gripper': grip})
-        robot.bus.enable_torque(num_retry=5)
-        held_grip = None
+        if recovery is None:
+            robot.configure()
+            robot.bus.sync_write('Goal_Position', current | {'gripper': grip})
+            robot.bus.enable_torque(num_retry=5)
+        else:
+            # Never reconfigure/disable torque or replace preload with measured opening.
+            robot.bus.sync_write('Goal_Position', current | {'gripper': held_grip})
         i = 0
         while i < len(plan):
             stage = plan[i]; i += 1
-            if c.get('pick_only') and stage['stage'] == 'grasp':
-                held_grip = close_until_contact()
+            if stage['stage'] == 'grasp':
+                grasp_attempt += 1
+                try:
+                    held_grip = close_until_contact()
+                except EmptyGrasp:
+                    event('empty_grasp_retry', attempt=grasp_attempt)
+                    # Retreat vertically while still closed, then open at the high pose.
+                    retreat_and_replan(grasp_attempt < retry_settings(c)['grasp_attempts'])
+                    i = 0
+                    continue
                 event('grasp', measured=robot.bus.sync_read('Present_Position'))
                 continue
-            grip_command = held_grip if c.get('pick_only') and stage['stage'] == 'lift' else stage['gripper']
-            move(stage['joints_deg'], grip_command, stage['stage'] in ('grasp', 'lift', 'transfer', 'place'))
+            carrying = stage['stage'] in ('lift', 'transfer', 'place')
+            if carrying and held_grip is None:
+                raise RuntimeError('Carrying stage without confirmed contact')
+            if stage['stage'] == 'release':
+                journal('unknown', reason='release_in_progress')
+            move(stage['joints_deg'], held_grip if carrying else stage['gripper'], carrying)
+            if stage['stage'] == 'release':
+                held_grip = None
+                journal('unknown', reason='release_command_completed_requires_visual_check')
             event(stage['stage'], measured=robot.bus.sync_read('Present_Position'))
-            if stage['stage'] == 'approach' and scene is not None and c.get('refine_at_approach', True):
-                # Closed-loop correction: the camera is now ~10 cm from the cube, so hand-eye rotation error matters far less.
-                time.sleep(.5)
-                for _ in range(5):
-                    check_stop()
-                q_now, _ = read_q(robot, planner.fk)
-                found, _ = scene.detect(frame_last, q_now)
-                if 'cube' in found:
+            if stage['stage'] == 'approach' and scene is not None:
+                try:
+                    fresh = cube_observation('approach', scan=True)
                     old_p = np.array(obs['targets']['cube']['T_base_marker'])[:3, 3]
-                    new_p = np.array(found['cube']['T_base_marker'])[:3, 3]
-                    delta = np.r_[(new_p - old_p)[:2], 0.0]
-                    print(f'Refine at approach: cube moved {np.round(delta*1000,1).tolist()} mm in base xy')
-                    if np.linalg.norm(delta) < .06:
-                        try:
-                            plan[:] = planner.refine(plan, delta)
-                            event('refine', delta_mm=(delta*1000).tolist())
-                        except ValueError as e:
-                            print('Refine failed, keeping original plan:', e)
-                    else:
-                        print('Refine delta too large; keeping original plan')
-                else:
-                    print('Refine: cube not seen from approach pose; keeping original plan')
-            if stage['stage'] == 'hover' and scene is not None and c.get('grasp_view'):
-                # Visual servo: bring the cube to the taught pixel (physically fixed w.r.t. the fingers).
-                ref = tuple(c['grasp_view']['pixel'])
-                for k in range(4):
-                    time.sleep(.4)
-                    for _ in range(5):
-                        check_stop()
-                    q_now, _ = read_q(robot, planner.fk)
-                    found, _ = scene.detect(frame_last, q_now)
-                    if 'cube' not in found:
-                        print('Servo: cube not seen; continuing with current plan'); break
-                    T_base_cam = planner.fk(q_now) @ scene.X
-                    top = c['table_z_m'] + c['cube']['side_mm']/1000
-                    delta = scene.pixel_to_plane(T_base_cam, found['cube']['pixel'], top) - scene.pixel_to_plane(T_base_cam, ref, top)
-                    delta[2] = 0
-                    print(f'Servo {k+1}: cube is {np.round(delta*1000,1).tolist()} mm from the taught grasp view')
-                    event('servo', delta_mm=(delta*1000).tolist())
-                    if np.linalg.norm(delta) < .003:
-                        break
+                    new_p = np.array(fresh['targets']['cube']['T_base_marker'])[:3, 3]
+                    delta = np.r_[(new_p-old_p)[:2], 0.0]
                     if np.linalg.norm(delta) > .06:
-                        print('Servo delta too large; giving up servo'); break
-                    plan[:] = planner.refine(plan, delta, after='approach')
-                    hover_rows = plan[i - 1]['joints_deg']  # recomputed hover stage (same index as current)
-                    move(hover_rows, stage['gripper'], False)
+                        raise ObservationRejected('Approach correction exceeds 60 mm')
+                    plan[:] = planner.refine(plan, delta)
+                    obs['targets']['cube'] = fresh['targets']['cube']
+                    event('refine', delta_mm=(delta*1000).tolist())
+                except ObservationRejected:
+                    # Already high: stop after bounded acquisition, never descend blind.
+                    raise
+            if stage['stage'] == 'hover' and scene is not None:
+                try:
+                    fresh = cube_observation('pregrasp')
+                    old_p = np.array(obs['targets']['cube']['T_base_marker'])[:3, 3]
+                    new_p = np.array(fresh['targets']['cube']['T_base_marker'])[:3, 3]
+                    if np.linalg.norm(new_p-old_p)*1000 > retry_settings(c)['position_mm']:
+                        raise ObservationRejected('Cube moved since approach')
+                    if c.get('grasp_view') and 'pixel' in fresh['targets']['cube']:
+                        q_now, _ = read_q(robot, planner.fk)
+                        T_base_cam = planner.fk(q_now) @ scene.X
+                        top = c['table_z_m'] + c['cube']['side_mm']/1000
+                        delta = scene.pixel_to_plane(T_base_cam, fresh['targets']['cube']['pixel'], top) - scene.pixel_to_plane(T_base_cam, c['grasp_view']['pixel'], top)
+                        delta[2] = 0
+                        if np.linalg.norm(delta) > .003:
+                            if np.linalg.norm(delta) > .06:
+                                raise ObservationRejected('Visual servo correction exceeds 60 mm')
+                            plan[:] = planner.refine(plan, delta)
+                            move(plan[i-1]['joints_deg'], c['gripper_open'])
+                            # Recheck after the correction, with bounded corrections.
+                            pregrasp_retries += 1
+                            if pregrasp_retries >= retry_settings(c)['pregrasp_attempts']:
+                                raise ObservationRejected('Visual servo did not converge')
+                            i -= 1
+                            continue
+                except ObservationRejected as error:
+                    pregrasp_retries += 1
+                    event('pregrasp_retry', attempt=pregrasp_retries, reason=str(error))
+                    retreat_and_replan(pregrasp_retries < retry_settings(c)['pregrasp_attempts'])
+                    i = 0
+                    continue
             if stage['stage'] == 'lift' and not c.get('auto'):
                 answer = input('Visually check: cube is securely lifted? Type yes to continue: ').strip().lower()
                 if answer != 'yes':
                     raise RuntimeError('Pickup not confirmed')
         if c.get('pick_only'):
-            log['status'] = 'lift_operator_verified_holding'
+            log['status'] = 'lift_contact_only_unverified' if c.get('auto') else 'lift_operator_verified_holding'
             print('Lift finished. Motors remain enabled, holding the object; no release command sent.')
         else:
             answer = 'auto' if c.get('auto') else input('Visually check: cube is inside plate and gripper clear? Type yes if successful: ').strip().lower()
             log['status'] = 'success_operator_verified' if answer == 'yes' else 'placement_not_verified'
+            if answer == 'yes':
+                journal('empty', reason='operator_verified_release')
     except BaseException as e:
         log['status'] = 'aborted'
         log['reason'] = str(e) or type(e).__name__
+        log['holding_possible_object'] = held_grip is not None
+        log['recovery'] = 'hold_and_inspect_no_automatic_restart' if held_grip is not None else 'stopped'
+        if isinstance(e, MotionFailure):
+            log['events'].append({'time': time.time(), 'stage': 'motion_failure', 'recovery': log['recovery']})
         # Hold current arm position; do not release a potentially loaded arm.
         try:
             hold = robot.bus.sync_read('Present_Position')
+            if held_grip is not None:
+                hold['gripper'] = held_grip
             robot.bus.sync_write('Goal_Position', hold)
         except Exception as hold_error:
             log['hold_error'] = str(hold_error)
@@ -654,6 +871,10 @@ def main():
     p.add_argument('--output', type=Path, default=ROOT/'pick_place_output')
     p.add_argument('--locate-only', action='store_true')
     p.add_argument('--execute', action='store_true')
+    p.add_argument('--startup-state', choices=('empty', 'holding', 'unknown'),
+                   help='Override startup state after inspection; defaults to empty unless journal records holding/unknown')
+    p.add_argument('--recover-place', action='store_true',
+                   help='Place an already held cube using fresh tray observation; requires --execute')
     p.add_argument('--pick-only', action='store_true', help='Auto-select one marker, grasp and lift; no plate required')
     p.add_argument('--teach-tcp', action='store_true')
     p.add_argument('--scan-markers', action='store_true', help='Show detected IDs without connecting robot')
@@ -665,9 +886,14 @@ def main():
     a = p.parse_args()
     if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers, a.scan_color, a.teach_grasp_view, a.teach_tcp_click]) > 1:
         p.error('Choose only one mode')
+    if a.recover_place and (not a.execute or a.pick_only):
+        p.error('--recover-place requires --execute without --pick-only')
     c = json.loads(a.config.read_text())
     c['pick_only'] = a.pick_only
     c['auto'] = a.auto
+    c['recover_place'] = a.recover_place
+    if a.recover_place:
+        c['detector'] = 'aruco'  # Destination tag only; held cube need not be visible.
     a.output.mkdir(parents=True, exist_ok=True)
     if a.scan_color:
         cap = open_camera(c['camera'], 1280, 720)
@@ -770,8 +996,23 @@ def main():
             print('WARNING: calibration gate ignored; hand-eye error is cm-level, expect misses.')
         check_config(c, planning=not a.locate_only)
         scene = Scene(c, fk)
-    robot, cap = None, None
+    robot, cap, state_store = None, None, None
+    recovery = None
     try:
+        if a.execute or a.teach_tcp or a.teach_grasp_view:
+            state_store = GraspState(c)
+            previous = state_store.read()
+            print('Saved gripper state:', previous['state'], 'journal:', state_store.path)
+            confirmed = a.startup_state
+            if confirmed is None and not a.auto and (a.recover_place or previous['state'] != 'empty'):
+                confirmed = input('Inspect gripper NOW: empty / holding / unknown: ').strip().lower()
+            decision = startup_decision(previous, confirmed, a.recover_place)
+            if decision == 'recover':
+                if previous.get('context') != recovery_context(c):
+                    raise ValueError('Grasp calibration/config changed; automatic recovery blocked')
+                recovery = previous
+            else:
+                state_store.write('empty', reason='operator_confirmed_empty_at_startup' if confirmed == 'empty' else 'default_empty_at_startup')
         robot = robot_reader(argparse.Namespace(port=c['port'], robot_id=c['robot_id'],
                     calibration_dir=Path(c['calibration_dir']) if c['calibration_dir'] else None, disable_torque=a.teach_grasp_view))
         if a.teach_tcp:
@@ -799,6 +1040,27 @@ def main():
             print(f'Saved grasp_view pixel {np.round(px)} to {a.config}')
             return
         cap = open_camera(c['camera'], *scene.size)
+        if recovery is not None:
+            validate_recovery_feedback(robot, fk, c, recovery)
+            # No wrist search, reconfiguration, or motor commands during observation/planning.
+            obs = observe(cap, robot, scene, a.output/'recovery_observation', required=('plate',))
+            planner = Planner(fk, c, robot.calibration)
+            plan = recovery_plan(planner, obs)
+            save_json(a.output/'recovery_plan.json', {'observation': obs, 'stages': plan})
+            if not a.auto and input('Review recovery path to tray; type place to proceed: ').strip() != 'place':
+                return
+            fresh = observe(cap, robot, scene, a.output/'recovery_recheck', required=('plate',))
+            old = matrix(obs['targets']['plate']['T_base_marker'])
+            new = matrix(fresh['targets']['plate']['T_base_marker'])
+            if np.linalg.norm(old[:3,3]-new[:3,3]) > .005 or np.linalg.norm(cv2.Rodrigues(old[:3,:3].T @ new[:3,:3])[0]) > np.deg2rad(5):
+                raise ValueError('Tray moved during recovery review; stopped')
+            if abs(fresh['gripper']-recovery['opening']) > 5:
+                raise ValueError('Gripper changed during recovery observation; stopped')
+            # Replan from fresh measured joints, never replay a saved joint trajectory.
+            plan = recovery_plan(planner, fresh)
+            validate_recovery_feedback(robot, fk, c, recovery)
+            execute(robot, planner, plan, fresh, cap, a.output, scene, state_store, recovery)
+            return
         if a.execute:
             # Hold the observation pose with torque so the operator can let go (steadier camera, no hand tremor).
             robot.bus.sync_write('Goal_Position', robot.bus.sync_read('Present_Position'))
@@ -807,7 +1069,18 @@ def main():
             time.sleep(1)
         if c.get('detector') == 'color':
             pick_color_by_click(cap, c)
-        obs = observe(cap, robot, scene, a.output)
+        planner = Planner(fk, c, robot.calibration) if a.execute else None
+        origin, _ = read_q(robot, fk)
+        def search_poll():
+            ok, frame = cap.read()
+            if not ok:
+                raise RuntimeError('Camera lost during search')
+            cv2.imshow('Pick/place', frame)
+            if cv2.waitKey(1) & 255 in (27, ord('q')):
+                raise KeyboardInterrupt
+        def initial_search(attempt):
+            wrist_search(robot, planner, origin, attempt, search_poll)
+        obs = observe(cap, robot, scene, a.output, scan=initial_search if a.execute else None)
         print(json.dumps(obs['targets'], indent=2))
         if a.locate_only:
             return
@@ -830,12 +1103,14 @@ def main():
             new = matrix(fresh['targets'][role]['T_base_marker'])
             if np.linalg.norm(old[:3, 3]-new[:3, 3]) > .02 or np.linalg.norm(cv2.Rodrigues(old[:3, :3].T @ new[:3, :3])[0]) > np.deg2rad(10):
                 raise ValueError('Scene changed; rerun observation and planning')
-        execute(robot, planner, plan, obs, cap, a.output, scene)
+        execute(robot, planner, plan, obs, cap, a.output, scene, state_store)
     finally:
         if cap is not None:
             cap.release()
         if robot is not None:
             robot.bus.disconnect(disable_torque=False)
+        if state_store is not None:
+            state_store.close()
         cv2.destroyAllWindows()
 
 

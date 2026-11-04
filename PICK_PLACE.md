@@ -124,3 +124,59 @@ python pick_place.py --pick-only --execute
 当前实物尺寸按用户最新说明保留：方块 250 mm，marker 180 mm；盘子另记录 reported_size_mm=[1000,1000]，未当作已知内外边界。请确认机械夹爪有足够张口；缩小配置尺寸不会改变实物是否可夹。
 
 此模式仍需要 table_z_m、工作空间、工具包络、grasp_depth_mm 等实物参数，及通过检查的手眼标定；不会为缺失参数编造数值。模型名义 TCP 已由 gripper_frame_joint 写入配置，尚未验证实物偏差。
+
+## 有限重试与故障恢复
+
+`pick_place_config.json` 的 `retry` 控制重试；`--execute` 中启用动作恢复，定位/规划模式只重新采样，不转动电机。
+
+| 情况 | 判定 | 恢复行为（默认配置） |
+|---|---|---|
+| cube / plate 未识别 | 所需目标缺失、PnP 无有效解，或观察批次不稳定 | 高位观察最多 3 批：原位、相对起始 wrist_roll +12°、-12°。每批先丢弃 5 帧，再要求 5 帧有效检测。扫描完整路径先过关节/桌面/工作空间检查，速度不超过 5°/s；姿态过低或路径不可行则停止。执行中 approach 搜索成功后恢复原腕角。 |
+| 下抓前位置不稳定 | 5 帧位置偏离中位数 >5 mm、姿态相对末帧 >5°、关节变化 >0.3°；或 hover 观测相对 approach 偏移 >5 mm | 低位先原地最多采样 3 批，仍失败则竖直回撤到 approach 高度，重新观察 cube 并重新规划。默认允许一次重新规划，再失败回撤并停止，不盲目下降。 |
+| 明确空抓 | 闭合时开度到达 `gripper_closed + 2`，此前未检测到稳定接触 | 保持闭合竖直回撤，高位张开，重新定位 cube、重算路径，再抓。总共最多 3 次抓取；最后失败回撤停止。20 秒无稳定接触、闭合时手臂偏移 >3°、人工否认抓住属于不确定/异常状态，直接停止，不自动松爪重抓。 |
+| 抓起后移动失败 | 轨迹跟踪误差 >8°，或原有控制器 3 秒内未达到收敛条件；相机掉线/取消也终止 | 尝试保持当前关节位置及抓取时的夹持命令，不继续转移、不松爪、不自动重抓。记录 `holding_possible_object` 和 `hold_and_inspect_no_automatic_restart`。需要检查实物状态后再决定恢复。 |
+
+原有运动控制器的收敛规则保持不变：优先误差 <1°；有限补偿后可接受 <4°。重试不会消除固定的标定/TCP 偏差。
+
+完整 pick/place 和 pick-only 均使用接触判定，抬升/转移/下降持续保持检测接触时的夹爪命令；只在 release 阶段松爪。稳定接触仍不是“确实夹住 cube”的证明，自动模式的只抓取结果记为 `lift_contact_only_unverified`，没有新增视觉持物验证。盘子须固定；重新抓取时保留原盘子坐标，cube 修正不会再平移放置点。
+
+日志：各观察子目录的 `observation_retries.json` 记录失败原因；`execution.json` 记录 `wrist_search`、`pregrasp_retry`、`empty_grasp_retry`、`retry_retreat` 和 `motion_failure`。`retry_plan.json` 保存最近一次重新规划结果。Q/ESC、相机故障、关节通信故障不会触发继续扫描或重抓。
+
+本次没有补造盘子尺寸或覆盖远端 TCP/偏移设置；完整放置仍需先填写当前配置中的盘子 ID、marker 尺寸及内外边界等必填值。
+
+离线故障注入测试（模拟电机和相机）：
+
+```bash
+python -m unittest -v test_retries test_pick_place test_calibration
+```
+
+## 重启保护：先确认夹爪状态
+
+所有 `--execute`、`--teach-tcp`、`--teach-grasp-view` 操作都在连接机器人前读取状态。**首次运行（无文件）及保存状态为 `empty` 时，默认空夹爪直接启动，不询问。** 普通抓放随后检测 cube 和 tray，`--pick-only` 只检测 cube。已有 `holding` 或 `unknown` 记录时，交互模式要求实物确认，`--auto` 停止；可用 `--startup-state` 显式说明检查后的实物状态。不要把 `--startup-state empty` 固定在无人检查的循环/启动脚本中。
+
+- `empty`：允许正常抓取/示教；这是你刚目视检查后的声明，可以覆盖旧日志中的持物状态。
+- `holding`：普通抓取/示教被阻止。仅允许下面的 `--recover-place` 恢复放置入口。
+- `unknown` 或自动模式遇到未处理的持物/不确定记录：停止，不连接机器人、不发动作命令。
+
+正常抓取（每次运行前必须确认确实空夹爪）：
+
+```bash
+python pick_place.py --execute --pick-only --auto
+```
+
+持物恢复放置（不加 `--pick-only`，需完整盘子几何配置）：
+
+```bash
+python pick_place.py --execute --recover-place --startup-state holding
+# 已检查夹持和路径、需要非交互运行时，再添加 --auto。
+```
+
+恢复要求：本机持物记录存在、当前再次确认持物、夹持命令有效、开度与保存值相差不超过 5 个 LeRobot 开度单位且未接近闭合终点、所有关节/夹爪扭矩已开启，以及抓取几何/URDF/手眼标定未改变。恢复入口遇到缺失/损坏记录、闭合中断或释放中断时拒绝自动恢复，不能凭开度猜测一个夹持命令。记录不符合条件时不提供强制自动恢复；先由操作者确认并处理实物状态。
+
+恢复会保持现有扭矩，不调用 `robot.configure()`，不先张爪，不转腕搜索。只重新观察盘子 tag，保存并检查 `recovery_plan.json`；复核盘子位姿后，从**当前实测关节位置重新规划**：竖直抬高 → 移到盘子上方 → 下降 → 松爪 → 回撤。盘子不可见、位姿变化 >5 mm / 5°、路径不可行时停止。该流程沿用现有简化碰撞模型，仍需要人工确认环境和所持 cube 状态。
+
+持久状态在 `~/.local/state/hands-on-robo/<robot_id哈希>.json`，独立于仓库和 `--output`，包含空/持物/不确定、夹持命令、开度和标定指纹。更新使用原子替换及 fsync；同一 robot_id 加进程锁，避免两个本程序实例同时发动作。锁不约束其他控制软件，或以不同 robot_id 连接同一实体机器人的程序。
+
+闭合前先记为不确定，检测到接触后记为持物，释放前先记为不确定。自动执行完松爪仍记为不确定；人工确认放置完成才记为空。首次运行及旧版本没有记录时按约定默认空；已有持物/不确定记录仍须处理。默认空是初始条件假设，并非传感器识别；删除状态文件会丢失保护依据。状态记录不能自动识别滑落、断电或物体被人取走。
+
+测试：`python -m unittest -v test_startup_state test_retries test_pick_place test_calibration`。
