@@ -1,5 +1,56 @@
 {
   "status": "aborted",
-  "events": [],
-  "reason": "Invalid joint angles / joint limit exceeded"
+  "events": [
+    {
+      "time": 1793753393.942466,
+      "stage": "align",
+      "measured": {
+        "shoulder_pan": -8.0,
+        "shoulder_lift": 31.12087912087912,
+        "elbow_flex": -44.26373626373626,
+        "wrist_flex": 100.52747252747253,
+        "wrist_roll": -149.4065934065934,
+        "gripper": 89.32621747831888
+      }
+    },
+    {
+      "time": 1793753399.389872,
+      "stage": "approach",
+      "measured": {
+        "shoulder_pan": 2.6373626373626373,
+        "shoulder_lift": 52.21978021978022,
+        "elbow_flex": -73.8021978021978,
+        "wrist_flex": 90.68131868131869,
+        "wrist_roll": -139.56043956043956,
+        "gripper": 89.32621747831888
+      }
+    },
+    {
+      "time": 1793753400.361865,
+      "stage": "refine",
+      "delta_mm": [
+        -6.775499276766517,
+        6.691256328562031,
+        0.0
+      ]
+    },
+    {
+      "time": 1793753401.725884,
+      "stage": "descend",
+      "measured": {
+        "shoulder_pan": 2.10989010989011,
+        "shoulder_lift": 64.52747252747253,
+        "elbow_flex": -73.18681318681318,
+        "wrist_flex": 88.13186813186813,
+        "wrist_roll": -140.17582417582418,
+        "gripper": 89.32621747831888
+      }
+    },
+    {
+      "time": 1793753419.596651,
+      "stage": "empty_grasp",
+      "measured_opening": 1.6010673782521683
+    }
+  ],
+  "reason": "Gripper reached closed endpoint: possible empty grasp; no lift"
 }
