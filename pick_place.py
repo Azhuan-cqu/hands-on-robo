@@ -362,9 +362,9 @@ class Planner:
             rows.append(q.tolist())
         return rows, q
 
-    def refine(self, plan, delta):
-        """Shift every stage after 'approach' by delta (base frame, m) and recompute its joint path."""
-        idx = next(i for i, s in enumerate(plan) if s['stage'] == 'approach')
+    def refine(self, plan, delta, after='approach'):
+        """Shift every stage after `after` by delta (base frame, m) and recompute its joint path."""
+        idx = next(i for i, s in enumerate(plan) if s['stage'] == after)
         q = np.array(plan[idx]['joints_deg'][-1]); prev = np.array(plan[idx]['T_base_tcp'])
         out = plan[:idx + 1]
         for s in plan[idx + 1:]:
@@ -416,7 +416,8 @@ class Planner:
             align = start.copy()
             align[:3, :3] = R
             align[2, 3] = max(start[2, 3], safe_z)
-            targets = [('align', align, 'open'), ('approach', pose(above_pick), 'open'),
+            hover = pick.copy(); hover[2] += c.get('grasp_view', {}).get('hover_mm', 15)/1000
+            targets = [('align', align, 'open'), ('approach', pose(above_pick), 'open'), ('hover', pose(hover), 'open'),
                        ('descend', pose(pick), 'open'), ('grasp', pose(pick), 'closed'),
                        ('lift', pose(above_pick), 'closed')]
             if not pick_only:
@@ -604,6 +605,30 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
                         print('Refine delta too large; keeping original plan')
                 else:
                     print('Refine: cube not seen from approach pose; keeping original plan')
+            if stage['stage'] == 'hover' and scene is not None and c.get('grasp_view'):
+                # Visual servo: bring the cube to the taught pixel (physically fixed w.r.t. the fingers).
+                ref = tuple(c['grasp_view']['pixel'])
+                for k in range(4):
+                    time.sleep(.4)
+                    for _ in range(5):
+                        check_stop()
+                    q_now, _ = read_q(robot, planner.fk)
+                    found, _ = scene.detect(frame_last, q_now)
+                    if 'cube' not in found:
+                        print('Servo: cube not seen; continuing with current plan'); break
+                    T_base_cam = planner.fk(q_now) @ scene.X
+                    top = c['table_z_m'] + c['cube']['side_mm']/1000
+                    delta = scene.pixel_to_plane(T_base_cam, found['cube']['pixel'], top) - scene.pixel_to_plane(T_base_cam, ref, top)
+                    delta[2] = 0
+                    print(f'Servo {k+1}: cube is {np.round(delta*1000,1).tolist()} mm from the taught grasp view')
+                    event('servo', delta_mm=(delta*1000).tolist())
+                    if np.linalg.norm(delta) < .003:
+                        break
+                    if np.linalg.norm(delta) > .06:
+                        print('Servo delta too large; giving up servo'); break
+                    plan[:] = planner.refine(plan, delta, after='approach')
+                    hover_rows = plan[i - 1]['joints_deg']  # recomputed hover stage (same index as current)
+                    move(hover_rows, stage['gripper'], False)
             if stage['stage'] == 'lift' and not c.get('auto'):
                 answer = input('Visually check: cube is securely lifted? Type yes to continue: ').strip().lower()
                 if answer != 'yes':
@@ -638,10 +663,11 @@ def main():
     p.add_argument('--teach-tcp', action='store_true')
     p.add_argument('--scan-markers', action='store_true', help='Show detected IDs without connecting robot')
     p.add_argument('--scan-color', action='store_true', help='Preview the colour mask (tune cube.hsv_ranges); no robot')
+    p.add_argument('--teach-grasp-view', action='store_true', help='Hold the gripper centred just above the cube; records where the cube appears in the image')
     p.add_argument('--ignore-calibration-gate', action='store_true', help='Execute even if hand-eye consistency is poor (expect misses)')
     p.add_argument('--auto', action='store_true', help='No keypresses or confirmations: capture when still, run the plan straight through')
     a = p.parse_args()
-    if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers, a.scan_color]) > 1:
+    if sum([a.locate_only, a.execute, a.teach_tcp, a.scan_markers, a.scan_color, a.teach_grasp_view]) > 1:
         p.error('Choose only one mode')
     c = json.loads(a.config.read_text())
     c['pick_only'] = a.pick_only
@@ -711,9 +737,30 @@ def main():
     robot, cap = None, None
     try:
         robot = robot_reader(argparse.Namespace(port=c['port'], robot_id=c['robot_id'],
-                    calibration_dir=Path(c['calibration_dir']) if c['calibration_dir'] else None, disable_torque=False))
+                    calibration_dir=Path(c['calibration_dir']) if c['calibration_dir'] else None, disable_torque=a.teach_grasp_view))
         if a.teach_tcp:
             teach(robot, fk, a.output)
+            return
+        if a.teach_grasp_view:
+            cap = open_camera(c['camera'], *scene.size)
+            print('Torque is OFF. Put the OPEN gripper centred over the cube, fingertips ~5 mm above its top. Hold still...')
+            pick_color_by_click(cap, c)
+            pixels = []
+            for _ in range(15):
+                ok, frame = cap.read()
+                q, _ = read_q(robot, scene.fk)
+                found, view = scene.detect(frame, q)
+                if 'cube' in found:
+                    pixels.append(found['cube']['pixel'])
+                cv2.imshow('Pick/place', view); cv2.waitKey(1)
+            if len(pixels) < 8:
+                raise ValueError('Cube not detected reliably')
+            px = np.median(pixels, axis=0).tolist()
+            saved = json.loads(a.config.read_text())
+            saved['grasp_view'] = {'pixel': px, 'hover_mm': 15, 'joints_deg': q, 'hsv_ranges': c['cube']['hsv_ranges']}
+            saved['cube']['hsv_ranges'] = c['cube']['hsv_ranges']
+            save_json(a.config, saved)
+            print(f'Saved grasp_view pixel {np.round(px)} to {a.config}')
             return
         cap = open_camera(c['camera'], *scene.size)
         if a.execute:
