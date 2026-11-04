@@ -239,8 +239,8 @@ class Planner:
         re = np.rad2deg(np.linalg.norm(cv2.Rodrigues(target[:3, :3].T @ actual[:3, :3])[0]))
         if pe > .002 or re > 35:  # ponytail: this 5-DOF model cannot point the tool straight down anywhere; accept a tilted grasp
             raise ValueError(f'Unreachable TCP pose: {pe*1000:.1f} mm / {re:.1f} deg; reposition targets')
-        if np.max(np.abs(result.x - seed)) > 12:
-            raise ValueError('IK discontinuity: joint step >12 deg')
+        if np.max(np.abs(result.x - seed)) > 20:
+            raise ValueError('IK discontinuity: joint step >20 deg')
         return result.x
 
     def clearance(self, q):
@@ -323,7 +323,7 @@ class Planner:
             try:
                 for name, target, grip in targets:
                     angle = cv2.Rodrigues(prev[:3, :3].T @ target[:3, :3])[0].ravel()
-                    count = max(1, int(np.ceil(np.linalg.norm(target[:3, 3]-prev[:3, 3])/.01)), int(np.ceil(np.linalg.norm(angle)/.1)))
+                    count = max(1, int(np.ceil(np.linalg.norm(target[:3, 3]-prev[:3, 3])/.005)), int(np.ceil(np.linalg.norm(angle)/.05)))
                     segment = []
                     for u in np.linspace(0, 1, count+1)[1:]:
                         goal = transform(prev[:3, :3] @ cv2.Rodrigues(angle*u)[0], (1-u)*prev[:3, 3]+u*target[:3, 3])
@@ -392,15 +392,19 @@ def execute(robot, planner, plan, obs, cap, out):
         cv2.imshow('Pick/place', frame)
         if cv2.waitKey(1) & 255 in (27, ord('q')):
             raise KeyboardInterrupt
-    def move(target, grip, allow_gripper_contact=False):
+    def move(path, grip, allow_gripper_contact=False):
+        """One continuous smooth motion through all waypoints of a stage; settle only at the end."""
         nonlocal last
         q, oldgrip = read_q(robot, planner.fk)
         old = np.array([q[n] for n in planner.fk.names])
-        duration = max(.15, np.max(np.abs(target-old))/c['speed_deg_s']*1.6, abs(grip-oldgrip)/20*1.6)
-        steps = max(2, int(np.ceil(duration*20)))
+        pts = np.vstack([old] + [np.asarray(p, dtype=float) for p in path])
+        target = pts[-1]
+        cum = np.r_[0, np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))]
+        duration = max(.3, np.sum(np.max(np.abs(np.diff(pts, axis=0)), axis=1))/c['speed_deg_s'], abs(grip-oldgrip)/20)
+        steps = max(2, int(np.ceil(duration*25)))
         for u in np.linspace(0, 1, steps+1)[1:]:
             s = 3*u*u-2*u*u*u
-            cmd = old+(target-old)*s
+            cmd = target.copy() if cum[-1] == 0 else np.array([np.interp(s*cum[-1], cum, pts[:, i]) for i in range(pts.shape[1])])
             planner.clearance(cmd)
             robot.bus.sync_write('Goal_Position', dict(zip(planner.fk.names, cmd)) | {'gripper': oldgrip+(grip-oldgrip)*s})
             check_stop()
@@ -458,8 +462,7 @@ def execute(robot, planner, plan, obs, cap, out):
                 event('grasp', measured=robot.bus.sync_read('Present_Position'))
                 continue
             grip_command = held_grip if c.get('pick_only') and stage['stage'] == 'lift' else stage['gripper']
-            for row in stage['joints_deg']:
-                move(np.array(row), grip_command, stage['stage'] in ('grasp', 'lift', 'transfer', 'place'))
+            move(stage['joints_deg'], grip_command, stage['stage'] in ('grasp', 'lift', 'transfer', 'place'))
             event(stage['stage'], measured=robot.bus.sync_read('Present_Position'))
             if stage['stage'] == 'lift' and not c.get('auto'):
                 answer = input('Visually check: cube is securely lifted? Type yes to continue: ').strip().lower()
