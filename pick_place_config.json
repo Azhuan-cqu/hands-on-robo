@@ -76,5 +76,11 @@
   "tool_radius_mm": 15,
   "tcp_lowest_extent_mm": 10,
   "tcp_source": "so101_new_calib.urdf:gripper_frame_joint",
-  "tcp_status": "URDF nominal reference frame; physical contact center and jaw opening not validated"
+  "tcp_status": "URDF nominal reference frame; physical contact center and jaw opening not validated",
+  "pick_offset_mm": [
+    0,
+    0,
+    0
+  ],
+  "pick_offset_note": "base frame, mm: [x forward from base, y, z up]; added to the grasp point"
 }
