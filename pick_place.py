@@ -515,9 +515,21 @@ def execute(robot, planner, plan, obs, cap, out, scene=None):
                 raise RuntimeError('Joint tracking error >8 deg')
             time.sleep(duration/steps)
         deadline = time.monotonic()+3
+        boosts, boosted = 0, target.copy()
         while True:
             measured, measured_grip = read_q(robot, planner.fk)
-            if max(abs(measured[n]-target[i]) for i,n in enumerate(planner.fk.names)) < 4 and (allow_gripper_contact or abs(measured_grip-grip) < 10):
+            err = np.array([measured[n]-target[i] for i, n in enumerate(planner.fk.names)])
+            if np.max(np.abs(err)) < 1 and (allow_gripper_contact or abs(measured_grip-grip) < 10):
+                break
+            if np.max(np.abs(err)) < 4 and boosts < 3 and time.monotonic() < deadline:
+                # Gravity / load droop compensation: push the goal past the target by the measured error.
+                boosted -= err
+                planner.clearance(boosted)
+                robot.bus.sync_write('Goal_Position', dict(zip(planner.fk.names, boosted)) | {'gripper': grip})
+                boosts += 1
+                time.sleep(.4)
+                continue
+            if np.max(np.abs(err)) < 4 and (allow_gripper_contact or abs(measured_grip-grip) < 10):
                 break
             if time.monotonic() > deadline:
                 diff = {n: round(measured[n]-target[i], 1) for i, n in enumerate(planner.fk.names)} | {'gripper': round(measured_grip-grip, 1)}
