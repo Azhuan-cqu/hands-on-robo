@@ -4,7 +4,7 @@
   "camera": "0",
   "calibration_dir": null,
   "camera_yml": "intrinsic_output/camera.yml",
-  "handeye_json": "handeye_output_v4/handeye.json",
+  "handeye_json": "handeye_output_v5/handeye.json",
   "urdf": "so101_new_calib.urdf",
   "dictionary": "DICT_4X4_50",
   "cube": {
@@ -107,7 +107,7 @@
   "pick_offset_mm": [
     0,
     0,
-    3
+    0
   ],
   "pick_offset_note": "base frame, mm: [x forward from base, y, z up]; added to the grasp point",
   "detector": "color",
