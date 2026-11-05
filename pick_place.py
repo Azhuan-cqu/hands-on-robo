@@ -68,15 +68,15 @@ def calibration_gate(h):
         raise ValueError('Execution blocked: hand-eye consistency exceeds 5 mm / 2 deg. Recalibrate and validate on independent poses.')
 
 
-def detect_objects(frame, c):
-    """Shared 2D detection for robot observation and camera-only preview."""
+def detect_objects(frame, c, pose_context=None):
+    """Shared detection; cube uses 3D top-face check when pose_context is given, else 2D preview."""
     found, debug = {}, {}
     view = frame.copy()
     for role in roles(c):
         cfg = c[role]
         size = dict(min_area=cfg['min_area_px'], canny_low=cfg['canny_low'], canny_high=cfg['canny_high'])
         if role == 'cube':  # HSV ranges come from the color preset in detect_cube
-            result, details = detect_cube_top(frame, color=cfg['color'], **size)
+            result, details = detect_cube_top(frame, color=cfg['color'], pose_context=pose_context, **size)
             draw = draw_cube_detection
         else:  # tray uses detect_tray's default blue range
             result, details = detect_tray_center(frame, **size)
@@ -146,8 +146,13 @@ class Scene:
         """q: joint array in fk.names order."""
         if (frame.shape[1], frame.shape[0]) != self.size:
             raise ValueError('Camera resolution differs from calibration')
-        detections, view, _ = detect_objects(frame, self.c)
         T_base_cam = self.fk(dict(zip(self.fk.names, q))) @ self.X
+        cube = self.c['cube']
+        side = cube['side_mm'] / 1000
+        context = dict(K=self.K, D=self.D, T_base_camera=T_base_cam,
+                       side_m=side, top_z_m=self.c['table_z_m'] + side)
+        context.update({k: cube[k] for k in ('enforce_height', 'height_tolerance_m', 'max_tilt_deg', 'max_reprojection_px') if k in cube})
+        detections, view, _ = detect_objects(frame, self.c, context)
         found = {role: self.object_pose(result, role, T_base_cam)
                  for role, result in detections.items()}
         return found, view
