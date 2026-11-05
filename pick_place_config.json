@@ -25,18 +25,10 @@
   },
   "plate": {
     "rim_height_mm": 0,
-    "inner_half_size_mm": [
-      45,
-      45
-    ],
     "drop_offset_mm": [
       0,
       0,
       0
-    ],
-    "outer_half_size_mm": [
-      50,
-      50
     ],
     "hsv_low": [
       90,
@@ -93,11 +85,11 @@
   ],
   "gripper_open": 90,
   "gripper_closed": 0,
+  "grip_squeeze": 10,
   "clearance_m": 0.05,
   "link_radius_m": 0.035,
   "release_gap_mm": 3,
   "speed_deg_s": 15,
-  "tool_radius_mm": 15,
   "tcp_lowest_extent_mm": 10,
   "pick_offset_mm": [
     0,

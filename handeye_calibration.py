@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """SO101 eye-in-hand: T_base_gripper @ T_gripper_camera @ T_camera_board = constant."""
 import argparse
-import dataclasses
-import hashlib
 import itertools
 import json
 import time
@@ -10,12 +8,19 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 import cv2
 import numpy as np
-from camera_intrinsic import make_board, detect, open_camera, save_json, reprojection
+from camera_intrinsic import make_board, detect, load_camera, open_camera, save_json, reprojection
 
 
 def transform(R, t):
     T = np.eye(4)
     T[:3, :3], T[:3, 3] = R, np.asarray(t).reshape(3)
+    return T
+
+
+def matrix(value):
+    T = np.asarray(value, dtype=float)
+    if T.shape != (4, 4) or not np.isfinite(T).all() or not np.allclose(T[3], [0, 0, 0, 1]) or not np.allclose(T[:3, :3].T @ T[:3, :3], np.eye(3), atol=1e-5) or np.linalg.det(T[:3, :3]) < .99:
+        raise ValueError('Expected a rigid 4x4 transform')
     return T
 
 
@@ -61,11 +66,8 @@ class URDFFK:
 def solve(samples):
     if len(samples) < 10:
         raise ValueError('Need at least 10 samples; recommended 15–25')
-    G = [np.asarray(s['T_base_gripper'], dtype=float) for s in samples]
-    C = [np.asarray(s['T_camera_board'], dtype=float) for s in samples]
-    for T in G + C:
-        if T.shape != (4, 4) or not np.isfinite(T).all() or not np.allclose(T[3], [0, 0, 0, 1]) or not np.allclose(T[:3, :3].T @ T[:3, :3], np.eye(3), atol=1e-5) or np.linalg.det(T[:3, :3]) < .99:
-            raise ValueError('Invalid sample transform')
+    G = [matrix(s['T_base_gripper']) for s in samples]
+    C = [matrix(s['T_camera_board']) for s in samples]
     rv = np.array([cv2.Rodrigues(a[:3, :3].T @ b[:3, :3])[0].ravel() for a, b in itertools.combinations(G, 2)])
     singular = np.linalg.svd(rv, compute_uv=False)
     if singular[1] < .15 or singular[1] / max(singular[0], 1e-12) < .05:
@@ -81,7 +83,7 @@ def solve(samples):
     mean_R = U @ np.diag([1, 1, np.linalg.det(U @ V)]) @ V
     terr = np.linalg.norm(boards[:, :3, 3] - center, axis=1) * 1000
     rerr = [float(np.rad2deg(np.linalg.norm(cv2.Rodrigues(mean_R.T @ b[:3, :3])[0]))) for b in boards]
-    return {'T_gripper_camera': X.tolist(), 'T_camera_gripper': np.linalg.inv(X).tolist(),
+    return {'T_gripper_camera': X.tolist(),
             'translation_unit': 'meter', 'convention': 'p_gripper = T_gripper_camera @ p_camera',
             'method': 'PARK', 'sample_count': len(samples), 'rotation_excitation_singular_values': singular.tolist(),
             'board_position_error_mm': terr.tolist(), 'board_rotation_error_deg': rerr,
@@ -171,7 +173,6 @@ def main():
     p.add_argument('--disable-torque', action='store_true', help='Release motors for supported manual movement')
     p.add_argument('--max-motion-deg', type=float, default=.3)
     p.add_argument('--max-pnp-rms', type=float, default=1.0)
-    p.add_argument('--auto', type=int, metavar='N', help='No keyboard: capture whenever the arm has been still for 2 s; solve after N samples')
     p.add_argument('--auto-poses', type=int, metavar='N', help='Torque ON: servos drive to random poses around the start pose, capture each, solve after N samples (no hands on the arm)')
     p.add_argument('--pose-range', type=float, nargs=5, default=[25, 15, 15, 20, 35], metavar='DEG', help='Half-range per joint for --auto-poses: pan lift elbow wrist_flex wrist_roll')
     a = p.parse_args()
@@ -183,37 +184,22 @@ def main():
             p.error('--robot-id is required for capture')
         if (a.output / 'samples.json').exists():
             raise ValueError('Samples already exist: choose a new output or use --solve-only')
-        fs = cv2.FileStorage(str(a.camera_yml), cv2.FILE_STORAGE_READ)
-        if not fs.isOpened():
-            raise ValueError('Cannot open camera.yml; calibrate intrinsics first')
-        K, D = fs.getNode('K').mat(), fs.getNode('D').mat()
-        size = (int(fs.getNode('image_width').real()), int(fs.getNode('image_height').real()))
-        config = json.loads(fs.getNode('board_json').string())
-        fs.release()
+        K, D, size, config = load_camera(a.camera_yml)
         board = make_board(argparse.Namespace(**config))
         params = cv2.aruco.CharucoParameters()
         params.cameraMatrix, params.distCoeffs = K, D
         detector = cv2.aruco.CharucoDetector(board, params)
         fk = URDFFK(a.urdf)
         data = {'board': config, 'base_frame': 'base_link', 'gripper_frame': 'gripper_link',
-                'robot_id': a.robot_id, 'urdf': a.urdf.read_text(), 'K': K.tolist(), 'D': D.tolist(), 'samples': []}
+                'robot_id': a.robot_id, 'image_size': list(size), 'K': K.tolist(), 'D': D.tolist(), 'samples': []}
         robot, cap = None, None
         try:
             cap = open_camera(a.camera, *size)
             robot = robot_reader(a)
-            data['motor_calibration'] = {name: dataclasses.asdict(value) for name, value in robot.calibration.items()}
-            data['motor_calibration_path'] = str(robot.calibration_fpath)
-            data['urdf_sha256'] = hashlib.sha256(a.urdf.read_bytes()).hexdigest()
-            data['joint_mapping'] = 'LeRobot use_degrees=True; direct degrees-to-radians; no added offsets'
-            data['image_size'] = list(size)
-            save_json(a.output / 'session_metadata.json', {k: v for k, v in data.items() if k != 'samples'})
             def read():
                 values = robot.bus.sync_read('Present_Position')
                 return {n: float(values[n]) for n in fk.names}
             print('Keep board/base fixed. SPACE: capture stationary pose; C: solve; Q: quit. Support arm if torque disabled.')
-            if a.auto:
-                print(f'AUTO mode: hold each pose still for 2 s to capture; solves after {a.auto} samples.')
-            hold, last_attempt = [], 0.0
             if a.auto_poses:
                 start_q = read()
                 robot.bus.sync_write('Goal_Position', robot.bus.sync_read('Present_Position'))
@@ -249,7 +235,7 @@ def main():
                 key = cv2.waitKey(1) & 255
                 if key in (27, ord('q')):
                     return
-                if key == ord('c') or (a.auto and len(data['samples']) >= a.auto) or (a.auto_poses and len(data['samples']) >= a.auto_poses):
+                if key == ord('c') or (a.auto_poses and len(data['samples']) >= a.auto_poses):
                     break
                 if a.auto_poses:
                     if tries > 6 * a.auto_poses:
@@ -259,20 +245,10 @@ def main():
                     drive_to(goal)
                     for _ in range(3):
                         cap.read()
-                elif a.auto:
-                    now = time.time()
-                    hold.append((now, [read()[n] for n in fk.names]))
-                    hold = [h for h in hold if now - h[0] < 2]
-                    still = len(hold) > 5 and now - hold[0][0] > 1.8 and np.ptp([h[1] for h in hold], axis=0).max() < a.max_motion_deg
-                    if not still or now - last_attempt < 3:
-                        continue
-                    last_attempt = now
                 elif key != 32:
                     continue
-                before = read()
-                start = time.time()
                 # Drain buffered images while the user holds the same pose.
-                readings = [before]
+                readings = [read()]
                 for _ in range(5):
                     ok, frame = cap.read()
                     if not ok:
@@ -286,7 +262,7 @@ def main():
                 if not d:
                     print('Rejected: insufficient corners')
                     continue
-                obj, img, ids = d
+                obj, img, _ = d
                 success, r, t = cv2.solvePnP(obj, img, K, D, flags=cv2.SOLVEPNP_ITERATIVE)
                 if not success:
                     continue
@@ -305,9 +281,7 @@ def main():
                 name = f'{len(data["samples"]):04d}.png'
                 if not cv2.imwrite(str(a.output / name), frame):
                     raise IOError('Image save failed')
-                data['samples'].append({'image': name, 'timestamp': start, 'capture_duration_s': time.time() - start,
-                    'joints_deg': q, 'joint_readings_deg': readings, 'ids': ids.ravel().tolist(),
-                    'corners': img.reshape(-1, 2).tolist(), 'pnp_rms_px': error,
+                data['samples'].append({'image': name, 'joints_deg': q, 'pnp_rms_px': error,
                     'T_base_gripper': G.tolist(), 'T_camera_board': transform(R, t).tolist()})
                 save_json(a.output / 'samples.json', data)
                 print(f'Saved {len(data["samples"])}; PnP RMS={error:.3f}px; joints(deg)={q}', flush=True)
@@ -328,11 +302,6 @@ def main():
     result['before_offset_fit'] = {k: raw[k] for k in ('board_position_rms_mm', 'board_rotation_rms_deg')}
     result.update(base_frame='base_link', gripper_frame='gripper_link')
     save_json(a.output / 'handeye.json', result)
-    fs = cv2.FileStorage(str(a.output / 'handeye.yml'), cv2.FILE_STORAGE_WRITE)
-    fs.write('T_gripper_camera', np.array(result['T_gripper_camera']))
-    fs.write('T_camera_gripper', np.array(result['T_camera_gripper']))
-    fs.write('translation_unit', 'meter')
-    fs.release()
     print(json.dumps(result, indent=2))
     print('Residuals measure training-set consistency; validate on new poses before using the transform.')
 

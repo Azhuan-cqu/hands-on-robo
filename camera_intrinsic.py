@@ -40,6 +40,18 @@ def detect(frame, board, detector):
     return obj.astype(np.float32), img.astype(np.float32), ids
 
 
+def load_camera(path):
+    """camera.yml -> K, D, (width, height), board config dict."""
+    fs = cv2.FileStorage(str(path), cv2.FILE_STORAGE_READ)
+    if not fs.isOpened():
+        raise ValueError(f'Cannot open {path}; calibrate intrinsics first')
+    K, D = fs.getNode('K').mat(), fs.getNode('D').mat()
+    size = int(fs.getNode('image_width').real()), int(fs.getNode('image_height').real())
+    board = json.loads(fs.getNode('board_json').string())
+    fs.release()
+    return K, D, size, board
+
+
 def open_camera(source, width, height):
     cap = cv2.VideoCapture(int(source) if str(source).isdigit() else source)
     if not cap.isOpened():
@@ -93,7 +105,6 @@ def main():
         objects.append(obj)
         pixels.append(img)
         samples.append({'image': name, 'ids': ids.ravel().tolist(), 'corners': img.reshape(-1, 2).tolist()})
-        save_json(a.output / 'observations.json', {'board': board_config(a), 'image_size': size, 'samples': samples})
         print(f'Saved view {len(samples)}: {len(ids)} corners')
 
     if a.images:

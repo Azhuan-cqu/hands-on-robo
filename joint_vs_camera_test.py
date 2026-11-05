@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 import cv2
 import numpy as np
-from camera_intrinsic import make_board, detect, open_camera
+from camera_intrinsic import make_board, detect, load_camera, open_camera
 from handeye_calibration import robot_reader
 
 p = argparse.ArgumentParser(description=__doc__)
@@ -23,11 +23,8 @@ p.add_argument('--robot-id', default='my_awesome_follower_arm')
 p.add_argument('--calibration-dir', type=Path)
 a = p.parse_args()
 
-fs = cv2.FileStorage(str(a.camera_yml), cv2.FILE_STORAGE_READ)
-K, D = fs.getNode('K').mat(), fs.getNode('D').mat()
-size = (int(fs.getNode('image_width').real()), int(fs.getNode('image_height').real()))
-board = make_board(argparse.Namespace(**json.loads(fs.getNode('board_json').string())))
-fs.release()
+K, D, size, board_cfg = load_camera(a.camera_yml)
+board = make_board(argparse.Namespace(**board_cfg))
 params = cv2.aruco.CharucoParameters()
 params.cameraMatrix, params.distCoeffs = K, D
 detector = cv2.aruco.CharucoDetector(board, params)
@@ -73,7 +70,6 @@ try:
     time.sleep(.5)
     for _ in range(10):
         cap.read()  # flush
-    R0, t0 = board_pose(cap)
     start = float(robot.bus.read('Present_Position', a.joint))
     print(f'{"leg":10s} {"encoder":>9s} {"camera":>9s} {"cam move":>9s}')
     rows = []
