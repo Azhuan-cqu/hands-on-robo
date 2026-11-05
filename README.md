@@ -40,3 +40,7 @@ uv run python pick_place.py --pick-only --execute --auto --no-refine  # 不修�
 ## 排查
 
 `joint_vs_camera_test.py --joint elbow_flex --delta 6`：比较单个关节的编码器角度和相机测得的角度。
+
+## Robot Learning
+
+见 [robot_learning/README.md](robot_learning/README.md)：遥操作采集 → 训练 ACT → 评估。

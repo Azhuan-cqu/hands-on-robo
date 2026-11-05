@@ -5,3 +5,4 @@ joint_vs_camera_result.json
 pick_place_output/
 photos/
 .DS_Store
+outputs/
