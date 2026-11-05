@@ -15,6 +15,7 @@ def config():
     c = json.loads((ROOT/'pick_place_config.json').read_text())
     c.update(T_gripper_tcp=np.eye(4).tolist(), table_z_m=-1, workspace_min_m=[-1, -1, -1], workspace_max_m=[1, 1, 1],
              gripper_open=70, gripper_closed=15, tcp_lowest_extent_mm=5)
+    c['pick_offset_mm'] = [0, 0, c['pick_offset_mm'][2]]  # tests assume no xy tuning offset
     c['cube'].update(side_mm=30, grasp_depth_mm=15)
     c['plate'].update(rim_height_mm=15)
     return c
@@ -54,6 +55,7 @@ class PickTests(unittest.TestCase):
         c['cube'].update(side_mm=10, grasp_depth_mm=5)
         c.update(tcp_lowest_extent_mm=2)
         c['plate'].update(rim_height_mm=5)
+        c['pick_offset_mm'] = [-5, 3, 0]
         planner = Planner(fk, c)
         B = np.eye(4)
         B[:3, 3] = planner.tcp(q)[:3, 3] + [0, 0, -.1]
@@ -65,6 +67,10 @@ class PickTests(unittest.TestCase):
         self.assertEqual([s['stage'] for s in plan], ['align', 'approach', 'hover', 'descend', 'grasp', 'lift', 'transfer', 'place', 'release', 'retract'])
         self.assertEqual(plan[4]['gripper'], c['gripper_closed'])
         self.assertEqual(plan[8]['gripper'], c['gripper_open'])
+        # pick_offset shifts the grasp only; the cube (not the TCP) lands on the tray center.
+        grasp, release = (np.array(plan[i]['T_base_tcp'])[:2, 3] for i in (4, 8))
+        np.testing.assert_allclose(grasp - B[:2, 3], [-.005, .003], atol=1e-9)
+        np.testing.assert_allclose((P[:2, 3] - release) - (B[:2, 3] - grasp), 0, atol=1e-9)
 
     def test_pick_only_plan(self):
         c = config()
@@ -92,17 +98,17 @@ class PickTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             planner.clearance(np.zeros(5))
 
-    def run_pick(self, drop_cube=False, cube_error_mm=None, views_mm=None):
+    def run_pick(self, drop_cube=False, cube_error_mm=None, views_mm=None, cube_yaw_deg=0, q=(0., -30, 50, -20, 0)):
         """Servos reach every goal instantly; the gripper stalls at 30 on the cube.
         drop_cube: the cube slips out once the lift starts, so the gripper is free to close.
         cube_error_mm: the real cube is this far (base xy) from the first observation; the camera sees it exactly.
         views_mm: instead, what each refine measurement (10 frames) reports, relative to the first observation."""
         c = config()
         c.pop('plate')
-        c.update(pick_only=True, auto=True, refine_at_approach=cube_error_mm is not None or views_mm is not None,
+        c.update(pick_only=True, auto=True, refine_at_approach=cube_error_mm is not None or views_mm is not None or cube_yaw_deg != 0,
                  tcp_lowest_extent_mm=2)
         fk = URDFFK(ROOT/'so101_new_calib.urdf')
-        q = np.array([0., -30, 50, -20, 0])
+        q = np.array(q)
         c['T_gripper_tcp'] = vertical_tool(fk, q).tolist()
         c['cube'].update(side_mm=10, grasp_depth_mm=5)
         planner = Planner(fk, c)
@@ -127,6 +133,7 @@ class PickTests(unittest.TestCase):
         real = B.copy()
         if cube_error_mm is not None:
             real[:2, 3] += np.array(cube_error_mm) / 1000
+        real[:3, :3] = cv2.Rodrigues(np.array([0, 0, np.radians(cube_yaw_deg)]))[0]
         calls = []
         def detect(frame, q):
             seen = real.copy()
@@ -163,6 +170,16 @@ class PickTests(unittest.TestCase):
         # pick_offset_mm has no xy part, so the corrected grasp sits right over the real cube
         np.testing.assert_allclose(np.array(descend['T_base_tcp'])[:2, 3], real[:2, 3], atol=1e-6)
         np.testing.assert_allclose([robot.bus.pos[n] for n in fk.names], plan[-1]['joints_deg'][-1], atol=1e-6)
+
+    def test_refine_rotates_grasp_to_cube_yaw(self):
+        fk, plan, robot, log, real = self.run_pick(cube_error_mm=[0, 0], cube_yaw_deg=10, q=(0., -30, 50, 70, 0))  # wrist down: roll axis vertical
+        self.assertEqual(log['status'], 'picked_up_holding')
+        refine = next(e for e in log['events'] if e['stage'] == 'refine')
+        self.assertAlmostEqual(refine['dyaw_deg'], 10, places=6)
+        descend = np.array(next(s for s in plan if s['stage'] == 'descend')['T_base_tcp'])
+        yaw = np.degrees(np.arctan2(descend[1, 0], descend[0, 0]))
+        self.assertAlmostEqual((yaw - 10 + 45) % 90 - 45, 0, places=4)  # tool x along a cube edge
+        np.testing.assert_allclose(descend[:2, 3], real[:2, 3], atol=1e-6)
 
     def test_refine_corrects_once(self):
         """Later views (here: 20 mm the other way) must not move the grasp again."""

@@ -12,7 +12,10 @@
     "grasp_depth_mm": 10,
     "min_area_px": 400,
     "canny_low": 15,
-    "canny_high": 40
+    "canny_high": 40,
+    "max_tilt_deg": 35,
+    "max_reprojection_px": 5,
+    "height_tolerance_m": 0.01
   },
   "plate": {
     "rim_height_mm": 0,
@@ -64,7 +67,7 @@
     0.45,
     0.5
   ],
-  "gripper_open": 90,
+  "gripper_open": 50,
   "gripper_closed": 0,
   "grip_squeeze": 5,
   "clearance_m": 0.05,
@@ -73,7 +76,7 @@
   "speed_deg_s": 15,
   "tcp_lowest_extent_mm": 10,
   "pick_offset_mm": [
-    0,
+    7,
     0,
     -18
   ]

@@ -158,6 +158,10 @@ class Scene:
         return found, view
 
 
+def cube_yaw(T):
+    return np.arctan2(T[1][0], T[0][0])
+
+
 def read_q(robot, names):
     """Arm joints (array, in `names` order) and gripper opening."""
     values = robot.bus.sync_read('Present_Position')
@@ -276,13 +280,16 @@ class Planner:
             rows.append(q.tolist())
         return rows, q
 
-    def refine(self, plan, delta, after='approach'):
-        """Shift every stage after `after` by delta (base frame, m) and recompute its joint path."""
+    def refine(self, plan, T, after='approach'):
+        """Apply T (base frame, old cube pose -> new) to the pick stages after `after`;
+        place stages keep their tray targets. Recompute every later joint path."""
         idx = next(i for i, s in enumerate(plan) if s['stage'] == after)
         q = np.array(plan[idx]['joints_deg'][-1]); prev = np.array(plan[idx]['T_base_tcp'])
         out = plan[:idx + 1]
         for s in plan[idx + 1:]:
-            target = np.array(s['T_base_tcp']); target[:3, 3] += delta
+            target = np.array(s['T_base_tcp'])
+            if s['stage'] in ('hover', 'descend', 'grasp', 'lift'):
+                target = T @ target
             rows, q = self.segment(prev, target, q)
             out.append(dict(s, joints_deg=rows, T_base_tcp=target.tolist()))
             prev = target
@@ -303,6 +310,8 @@ class Planner:
         else:
             plate = matrix(obs['targets']['plate']['T_base_object'])
             drop = (plate @ np.r_[np.array(c['plate']['drop_offset_mm'])/1000, 1])[:3]
+            # The cube hangs -pick_offset (xy, base frame) from the TCP: offset the TCP the same way so the cube lands on target.
+            drop[:2] += np.array(c['pick_offset_mm'][:2])/1000
             drop[2] += (c['cube']['side_mm'] - c['cube']['grasp_depth_mm'] + c['release_gap_mm'])/1000
             safe_z = max(cube[2, 3], plate[2, 3] + c['plate']['rim_height_mm']/1000) + c['clearance_m'] + c['cube']['side_mm']/1000
         q0 = np.array([obs['joints_deg'][n] for n in self.fk.names])
@@ -444,50 +453,59 @@ def execute(robot, planner, plan, obs, cap, out, scene):
             time.sleep(.05)
         raise RuntimeError('No stable contact before timeout; no lift')
     def locate_cube(q_now):
-        """Mean cube position (base frame) of 3 detections, trying up to 15 frames; None if fewer than 3."""
-        seen = []
+        """Mean cube position (base frame) and yaw of 3 detections, trying up to 15 frames; None if fewer than 3."""
+        seen, yaws = [], []
         for _ in range(15):
             check_stop()
             found, _ = scene.detect(frame_last, q_now)
             if 'cube' in found:
-                seen.append(np.array(found['cube']['T_base_object'])[:3, 3])
+                T = np.array(found['cube']['T_base_object'])
+                seen.append(T[:3, 3])
+                yaws.append(cube_yaw(T))
                 if len(seen) == 3:
                     print(f'  refine: 3 detections, spread {np.ptp(seen, axis=0)[:2]*1000} mm')
-                    return np.mean(seen, axis=0)
+                    # Square: yaw is only defined mod 90 deg, so average on the 4x circle.
+                    return np.mean(seen, axis=0), np.angle(np.mean(np.exp(4j * np.array(yaws)))) / 4
         return None
     def refine(i):
         """One close-range look above the cube (camera ~10 cm away, so hand-eye rotation error matters far less):
-        shift the approach pose and all later stages in base xy once. No re-check: views from new poses disagree
+        correct the cube xy and yaw once, at safe height (at hover the open fingers are already below the cube top).
+        Pick stages follow the cube; place stages keep the tray. No re-check: views from new poses disagree
         by more than they help, and chasing them oscillates."""
         time.sleep(.5)
         for _ in range(3):
             check_stop()  # flush stale camera frames
         q_now = read_q(robot, names)[0]
-        seen = locate_cube(q_now)
-        if seen is None:
+        located = locate_cube(q_now)
+        if located is None:
             print('  refine: cube not seen reliably, keeping plan')
             return
-        cube_p = np.array(obs['targets']['cube']['T_base_object'])[:3, 3]
+        seen, seen_yaw = located
+        old = np.array(obs['targets']['cube']['T_base_object'])
+        cube_p = old[:3, 3]
         delta = np.r_[(seen - cube_p)[:2], 0.0]
-        print(f'  refine: off by {np.round(delta[:2]*1000, 1).tolist()} mm')
-        if np.linalg.norm(delta) < .003:
+        dyaw = (seen_yaw - cube_yaw(old) + np.pi/4) % (np.pi/2) - np.pi/4  # same grasp side, no wrist flip
+        print(f'  refine: off by {np.round(delta[:2]*1000, 1).tolist()} mm, {np.degrees(dyaw):.1f} deg')
+        if np.linalg.norm(delta) < .003 and abs(dyaw) < np.radians(3):
             return
-        if np.linalg.norm(delta) >= .06:
+        if np.linalg.norm(delta) >= .06 or abs(dyaw) > np.radians(30):
             print('  refine: correction too large, keeping plan')
             return
+        # Rotate about the vertical through the cube, then move it to where it was seen.
+        Rz = cv2.Rodrigues(np.array([0, 0, dyaw]))[0]
+        T = transform(Rz, cube_p + delta - Rz @ cube_p)
         stage = plan[i]
         here = np.array(stage['T_base_tcp'])
-        there = here.copy()
-        there[:3, 3] += delta
+        there = T @ here
         try:
             rows, _ = planner.segment(here, there, q_now)
-            shifted = planner.refine(plan[:i] + [dict(stage, joints_deg=rows, T_base_tcp=there.tolist())] + plan[i+1:], delta)
+            shifted = planner.refine(plan[:i] + [dict(stage, joints_deg=rows, T_base_tcp=there.tolist())] + plan[i+1:], T)
         except ValueError as e:
             print('  refine failed, keeping plan:', e)
             return
         move(rows, stage['gripper'], 'refine', True)
         plan[:] = shifted
-        event('refine', delta_mm=(delta*1000).tolist())
+        event('refine', delta_mm=(delta*1000).tolist(), dyaw_deg=float(np.degrees(dyaw)))
 
     names = planner.fk.names
     try:
