@@ -35,7 +35,7 @@ uv run python pick_place.py --pick-only --execute --auto              # 到方�
 uv run python pick_place.py --pick-only --execute --auto --no-refine  # 不修正，按第一次识别直接抓
 ```
 
-`--scan-color` 预览检测，HSV 阈值在配置的 `cube`/`plate` 里。Q 或 Ctrl-C 停止，臂保持当前位置；托住臂再运行 `release_torque.py` 松开舵机。
+方块颜色在配置的 `cube.color` 里选（`purple`、`red` 等，阈值见 `detect_cube.py` 的 `COLOR_HSV_RANGES`），`--scan-color` 预览检测。完整流程放下后自动判定，打印 `>>> RESULT: SUCCESS` / `FAILED`。Q 或 Ctrl-C 停止，臂保持当前位置；托住臂再运行 `release_torque.py` 松开舵机。
 
 ## 排查
 

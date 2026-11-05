@@ -4,9 +4,11 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+import cv2
 import numpy as np
 from handeye_calibration import URDFFK
-from pick_place import Planner, check_config, calibration_gate, contact_candidate, execute, ROOT
+from pick_place import Planner, check_config, calibration_gate, contact_candidate, detect_objects, execute, ROOT
+from placement_success import cube_overlaps_tray
 
 
 def config():
@@ -90,13 +92,15 @@ class PickTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             planner.clearance(np.zeros(5))
 
-    def run_pick(self, drop_cube=False, cube_error_mm=None):
+    def run_pick(self, drop_cube=False, cube_error_mm=None, views_mm=None):
         """Servos reach every goal instantly; the gripper stalls at 30 on the cube.
         drop_cube: the cube slips out once the lift starts, so the gripper is free to close.
-        cube_error_mm: the real cube is this far (base xy) from the first observation; the camera sees it exactly."""
+        cube_error_mm: the real cube is this far (base xy) from the first observation; the camera sees it exactly.
+        views_mm: instead, what each refine measurement (10 frames) reports, relative to the first observation."""
         c = config()
         c.pop('plate')
-        c.update(pick_only=True, auto=True, refine_at_approach=cube_error_mm is not None, tcp_lowest_extent_mm=2)
+        c.update(pick_only=True, auto=True, refine_at_approach=cube_error_mm is not None or views_mm is not None,
+                 tcp_lowest_extent_mm=2)
         fk = URDFFK(ROOT/'so101_new_calib.urdf')
         q = np.array([0., -30, 50, -20, 0])
         c['T_gripper_tcp'] = vertical_tool(fk, q).tolist()
@@ -123,7 +127,14 @@ class PickTests(unittest.TestCase):
         real = B.copy()
         if cube_error_mm is not None:
             real[:2, 3] += np.array(cube_error_mm) / 1000
-        scene = SimpleNamespace(detect=lambda frame, q: ({'cube': {'T_base_object': real.tolist()}}, frame))
+        calls = []
+        def detect(frame, q):
+            seen = real.copy()
+            if views_mm is not None:
+                seen[:2, 3] += np.array(views_mm[min(len(calls) // 10, len(views_mm) - 1)]) / 1000
+            calls.append(1)
+            return {'cube': {'T_base_object': seen.tolist()}}, frame
+        scene = SimpleNamespace(detect=detect)
         with tempfile.TemporaryDirectory() as out, mock.patch('cv2.imshow'), mock.patch('cv2.waitKey', return_value=0), \
                 mock.patch('time.sleep'):
             try:
@@ -146,12 +157,38 @@ class PickTests(unittest.TestCase):
     def test_refine_moves_over_the_real_cube(self):
         fk, plan, robot, log, real = self.run_pick(cube_error_mm=[5, -4])
         stages = [e['stage'] for e in log['events']]
-        self.assertEqual(stages.count('refine'), 1)  # one correction, then the re-check sees it aligned
+        self.assertEqual(stages.count('refine'), 1)
         self.assertEqual(stages[-1], 'picked_up')
         descend = next(s for s in plan if s['stage'] == 'descend')
         # pick_offset_mm has no xy part, so the corrected grasp sits right over the real cube
         np.testing.assert_allclose(np.array(descend['T_base_tcp'])[:2, 3], real[:2, 3], atol=1e-6)
         np.testing.assert_allclose([robot.bus.pos[n] for n in fk.names], plan[-1]['joints_deg'][-1], atol=1e-6)
+
+    def test_refine_corrects_once(self):
+        """Later views (here: 20 mm the other way) must not move the grasp again."""
+        _, plan, _, log, real = self.run_pick(views_mm=[[9, 0], [-11, 0]])
+        self.assertEqual([e['stage'] for e in log['events']].count('refine'), 1)
+        descend = next(s for s in plan if s['stage'] == 'descend')
+        np.testing.assert_allclose(np.array(descend['T_base_tcp'])[:2, 3], real[:2, 3] + [.009, 0], atol=1e-6)
+
+    def test_purple_cube_and_tray_placement(self):
+        """Synthetic top view: blue tray + purple cube -> both detected; inside = placed, outside = not."""
+        c = json.loads((ROOT/'pick_place_config.json').read_text())
+        c['cube']['color'] = 'purple'
+        def scene(cube_x):
+            img = np.full((400, 600, 3), 255, np.uint8)
+            cv2.rectangle(img, (100, 100), (300, 300), (200, 80, 0), -1)  # blue tray
+            cv2.rectangle(img, (cube_x, 170), (cube_x + 60, 230), (200, 0, 150), -1)  # purple cube top
+            return detect_objects(img, c)
+        found, _, debug = scene(170)
+        self.assertEqual(set(found), {'cube', 'plate'})
+        np.testing.assert_allclose(found['cube']['center_px'], [200, 200], atol=2)
+        np.testing.assert_allclose(found['plate']['center_px'], [200, 200], atol=2)
+        self.assertTrue(cube_overlaps_tray(debug['cube']['mask'], debug['plate']['mask']))
+        _, _, debug = scene(420)
+        self.assertFalse(cube_overlaps_tray(debug['cube']['mask'], debug['plate']['mask']))
+        with self.assertRaises(ValueError):
+            check_config(dict(config(), cube=dict(config()['cube'], color='pink')))
 
     def test_stable_closed_is_not_contact(self):
         self.assertFalse(contact_candidate([0.] * 10, 0, 0))

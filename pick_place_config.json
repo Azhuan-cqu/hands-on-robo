@@ -1,25 +1,16 @@
 {
   "robot_id": "my_awesome_follower_arm",
   "port": "/dev/tty.usbmodem5B421342761",
-  "camera": "0",
+  "camera": "1",
   "calibration_dir": null,
   "camera_yml": "intrinsic_output/camera.yml",
   "handeye_json": "handeye_output_v5/handeye.json",
   "urdf": "so101_new_calib.urdf",
   "cube": {
+    "color": "red",
     "side_mm": 25,
     "grasp_depth_mm": 10,
     "min_area_px": 400,
-    "hsv_low": [
-      0,
-      80,
-      50
-    ],
-    "hsv_high": [
-      25,
-      255,
-      255
-    ],
     "canny_low": 15,
     "canny_high": 40
   },
@@ -29,16 +20,6 @@
       0,
       0,
       0
-    ],
-    "hsv_low": [
-      90,
-      70,
-      40
-    ],
-    "hsv_high": [
-      135,
-      255,
-      255
     ],
     "min_area_px": 400,
     "canny_low": 15,

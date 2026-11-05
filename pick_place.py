@@ -9,7 +9,9 @@ import numpy as np
 from scipy.optimize import least_squares
 from camera_intrinsic import load_camera, open_camera, save_json
 from handeye_calibration import URDFFK, matrix, robot_reader, transform
-from detect import detect_cube_top, detect_tray_center, draw_detection
+from detect_cube import COLOR_HSV_RANGES, detect_cube_top, draw_cube_detection
+from detect_tray import detect_tray_center, draw_tray_detection
+from placement_success import cube_overlaps_tray
 
 ROOT = Path(__file__).resolve().parent
 
@@ -36,12 +38,10 @@ def check_config(c):
         raise ValueError('Fill table_z_m with the measured table height')
     if not 0 < c['cube']['grasp_depth_mm'] < c['cube']['side_mm']:
         raise ValueError('Grasp depth must be between cube top and bottom')
+    if c['cube']['color'] not in COLOR_HSV_RANGES:
+        raise ValueError(f'cube.color must be one of {tuple(COLOR_HSV_RANGES)}')
     for role in roles(c):
         cfg = c[role]
-        lo, hi = cfg['hsv_low'], cfg['hsv_high']
-        if len(lo) != 3 or len(hi) != 3 or any(
-                not 0 <= l <= h <= limit for l, h, limit in zip(lo, hi, [179, 255, 255])):
-            raise ValueError(f'Invalid {role}.hsv_low / hsv_high')
         if cfg['min_area_px'] <= 0 or not 0 <= cfg['canny_low'] < cfg['canny_high']:
             raise ValueError(f'Invalid {role} area / Canny thresholds')
     if not c.get('pick_only'):
@@ -74,12 +74,17 @@ def detect_objects(frame, c):
     view = frame.copy()
     for role in roles(c):
         cfg = c[role]
-        detector = detect_cube_top if role == 'cube' else detect_tray_center
-        result, details = detector(frame, cfg['hsv_low'], cfg['hsv_high'], cfg['min_area_px'], cfg['canny_low'], cfg['canny_high'])
+        size = dict(min_area=cfg['min_area_px'], canny_low=cfg['canny_low'], canny_high=cfg['canny_high'])
+        if role == 'cube':  # HSV ranges come from the color preset in detect_cube
+            result, details = detect_cube_top(frame, color=cfg['color'], **size)
+            draw = draw_cube_detection
+        else:  # tray uses detect_tray's default blue range
+            result, details = detect_tray_center(frame, **size)
+            draw = draw_tray_detection
         debug[role] = details
         if result is not None:
             found[role] = result
-            view = draw_detection(view, result)
+            view[35:] = draw(view, result)[35:]  # keep the combined status line below
     status = ' | '.join(f'{role}: {"OK" if role in found else "not found"}' for role in roles(c))
     cv2.putText(view, status, (10, 25), cv2.FONT_HERSHEY_SIMPLEX, .6, (0, 220, 255), 2)
     return found, view, debug
@@ -115,7 +120,7 @@ class Scene:
         cfg = self.c[role]
         height = cfg['side_mm'] if role == 'cube' else cfg['surface_height_mm']
         z = self.c['table_z_m'] + height / 1000
-        corners = result['corners_px']
+        corners = result['top_corners_px' if role == 'cube' else 'corners_px']
         points = np.array([self.pixel_to_plane(T_base_cam, px, z) for px in corners])
         center = self.pixel_to_plane(T_base_cam, result['center_px'], z)
         # Opposite edges are averaged; cyclic order from detectors is arbitrary.
@@ -353,7 +358,8 @@ def execute(robot, planner, plan, obs, cap, out, scene):
         frame_last = frame
         if banner:
             frame = frame.copy()
-            cv2.putText(frame, banner, (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+            cv2.putText(frame, banner, (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.2,
+                        (0, 0, 255) if banner.startswith('FAILED') else (0, 255, 0), 3)
         cv2.imshow('Pick/place', frame)
         if cv2.waitKey(1) & 255 in (27, ord('q')):
             raise KeyboardInterrupt
@@ -389,10 +395,14 @@ def execute(robot, planner, plan, obs, cap, out, scene):
                 break
             if can_boost:
                 # Gravity / load droop compensation: push the goal past the target by the measured error.
-                boosted = np.clip(boosted - err, planner.lo, planner.hi)
-                robot.bus.sync_write('Goal_Position', goal(boosted, grip))
+                # Ramp the goal over ~0.3 s: a single jump of up to 8 deg makes the arm visibly twitch.
+                new = np.clip(boosted - err, planner.lo, planner.hi)
+                for u in np.linspace(0, 1, 9)[1:]:
+                    robot.bus.sync_write('Goal_Position', goal(boosted + (new - boosted) * u, grip))
+                    time.sleep(.04)
+                boosted = new
                 boosts += 1
-                time.sleep(.4)
+                time.sleep(.1)
                 continue
             if time.monotonic() > deadline:
                 # Continue anyway (operator's choice); the per-step 8 deg tracking check still guards the motion.
@@ -429,54 +439,50 @@ def execute(robot, planner, plan, obs, cap, out, scene):
             time.sleep(.05)
         raise RuntimeError('No stable contact before timeout; no lift')
     def locate_cube(q_now):
-        """Median cube position (base frame) over several frames; None if fewer than 3 clean detections."""
+        """Mean cube position (base frame) of 3 detections, trying up to 15 frames; None if fewer than 3."""
         seen = []
-        for _ in range(10):
+        for _ in range(15):
             check_stop()
             found, _ = scene.detect(frame_last, q_now)
             if 'cube' in found:
                 seen.append(np.array(found['cube']['T_base_object'])[:3, 3])
-        return np.median(seen, axis=0) if len(seen) >= 3 else None
+                if len(seen) == 3:
+                    print(f'  refine: 3 detections, spread {np.ptp(seen, axis=0)[:2]*1000} mm')
+                    return np.mean(seen, axis=0)
+        return None
     def refine(i):
-        """Closed-loop correction above the cube (camera ~10 cm away, so hand-eye rotation error matters far less):
-        detect -> shift approach pose and all later stages in base xy -> detect again, while the error keeps shrinking."""
+        """One close-range look above the cube (camera ~10 cm away, so hand-eye rotation error matters far less):
+        shift the approach pose and all later stages in base xy once. No re-check: views from new poses disagree
+        by more than they help, and chasing them oscillates."""
+        time.sleep(.5)
+        for _ in range(3):
+            check_stop()  # flush stale camera frames
+        q_now = read_q(robot, names)[0]
+        seen = locate_cube(q_now)
+        if seen is None:
+            print('  refine: cube not seen reliably, keeping plan')
+            return
         cube_p = np.array(obs['targets']['cube']['T_base_object'])[:3, 3]
-        total, last = np.zeros(3), np.inf
-        for attempt in range(1, 4):
-            time.sleep(.5)
-            for _ in range(3):
-                check_stop()  # flush stale camera frames
-            q_now = read_q(robot, names)[0]
-            seen = locate_cube(q_now)
-            if seen is None:
-                print('  refine: cube not seen reliably, keeping current plan')
-                return
-            delta = np.r_[(seen - cube_p)[:2], 0.0]
-            print(f'  refine {attempt}/3: off by {np.round(delta[:2]*1000, 1).tolist()} mm')
-            if np.linalg.norm(delta) < .003:
-                print('  refine: aligned')
-                return
-            if np.linalg.norm(delta) >= last:
-                # A correct move shrinks the error; growth means the views disagree (noise), so stop chasing it.
-                print('  refine: not converging, keeping current plan')
-                return
-            if np.linalg.norm(total + delta) >= .06:
-                print('  refine: correction too large, keeping current plan')
-                return
-            stage = plan[i]
-            here = np.array(stage['T_base_tcp'])
-            there = here.copy()
-            there[:3, 3] += delta
-            try:
-                rows, _ = planner.segment(here, there, q_now)
-                shifted = planner.refine(plan[:i] + [dict(stage, joints_deg=rows, T_base_tcp=there.tolist())] + plan[i+1:], delta)
-            except ValueError as e:
-                print('  refine failed, keeping current plan:', e)
-                return
-            move(rows, stage['gripper'], 'refine', True)
-            plan[:] = shifted
-            cube_p, total, last = cube_p + delta, total + delta, np.linalg.norm(delta)
-            event('refine', delta_mm=(delta*1000).tolist(), total_mm=(total*1000).tolist())
+        delta = np.r_[(seen - cube_p)[:2], 0.0]
+        print(f'  refine: off by {np.round(delta[:2]*1000, 1).tolist()} mm')
+        if np.linalg.norm(delta) < .003:
+            return
+        if np.linalg.norm(delta) >= .06:
+            print('  refine: correction too large, keeping plan')
+            return
+        stage = plan[i]
+        here = np.array(stage['T_base_tcp'])
+        there = here.copy()
+        there[:3, 3] += delta
+        try:
+            rows, _ = planner.segment(here, there, q_now)
+            shifted = planner.refine(plan[:i] + [dict(stage, joints_deg=rows, T_base_tcp=there.tolist())] + plan[i+1:], delta)
+        except ValueError as e:
+            print('  refine failed, keeping plan:', e)
+            return
+        move(rows, stage['gripper'], 'refine', True)
+        plan[:] = shifted
+        event('refine', delta_mm=(delta*1000).tolist())
 
     names = planner.fk.names
     try:
@@ -511,10 +517,21 @@ def execute(robot, planner, plan, obs, cap, out, scene):
         if c.get('pick_only'):
             log['status'] = 'picked_up_holding'
         else:
-            answer = 'auto' if c.get('auto') else input('Visually check: cube is inside plate and gripper clear? Type yes if successful: ').strip().lower()
-            log['status'] = 'success_operator_verified' if answer == 'yes' else 'placement_not_verified'
+            # Retracted above the tray, looking down: most cube pixels inside the tray footprint = placed.
+            votes = []
+            for _ in range(5):
+                check_stop()
+                _, _, debug = detect_objects(frame_last, c)
+                votes.append(cube_overlaps_tray(debug['cube']['mask'], debug['plate']['mask']))
+            success = sum(votes) >= 3
+            banner = 'SUCCESS' if success else 'FAILED'
+            log['status'] = 'success' if success else 'failed'
+            event('result', success=success, votes=votes)
+            print(f'>>> RESULT: {banner}' + ('' if success else ' (cube not inside tray)'), flush=True)
+            for _ in range(10):
+                check_stop()  # keep the verdict on screen for a moment
     except BaseException as e:
-        log['status'] = 'aborted'
+        log['status'] = 'failed'
         log['reason'] = str(e) or type(e).__name__
         # Hold current arm position; do not release a potentially loaded arm.
         try:
@@ -522,13 +539,19 @@ def execute(robot, planner, plan, obs, cap, out, scene):
             robot.bus.sync_write('Goal_Position', hold)
         except Exception as hold_error:
             log['hold_error'] = str(hold_error)
+        banner = 'FAILED: ' + log['reason'][:40]
+        try:
+            for _ in range(50):
+                check_stop()  # show the verdict for ~2 s; Q skips
+        except BaseException:
+            pass
         raise
     finally:
         save_json(out / 'execution.json', log)
 
 
 def scan_color(c):
-    """Camera only: live cube/tray detection and masks for tuning HSV thresholds."""
+    """Camera only: live cube/tray detection and masks, to check the color preset and lighting."""
     cap = open_camera(c['camera'], 1280, 720)
     try:
         while True:
@@ -650,6 +673,10 @@ def main():
                 if np.linalg.norm(old[:3, 3]-new[:3, 3]) > .02 or np.linalg.norm(cv2.Rodrigues(old[:3, :3].T @ new[:3, :3])[0]) > np.deg2rad(10):
                     raise ValueError('Scene changed; rerun observation and planning')
         execute(robot, planner, plan, obs, cap, a.output, scene)
+    except (RuntimeError, ValueError, KeyboardInterrupt) as e:
+        # Task failures (missed grasp, unreachable target, Q/Ctrl-C) are a result, not a crash: no traceback.
+        print(f'>>> RESULT: FAILED ({str(e) or type(e).__name__})', flush=True)
+        raise SystemExit(1)
     finally:
         if cap is not None:
             cap.release()
