@@ -1,14 +1,10 @@
 # Robot Learning
 
-用 LeRobot 做模仿学习：遥操作采集示教数据 → 训练 ACT 策略 → 在 SO-101 上评估。任务与第一部分相同：把方块放进托盘。
-
-先设置 Hugging Face 用户名（`huggingface-cli login` 之后）：
+用 LeRobot 采集示教数据、训练 ACT 策略并评估。
 
 ```bash
 export HF_USER=$(huggingface-cli whoami | head -n 1)
 ```
-
-`--robot.port` / `--teleop.port` 换成自己的串口（`lerobot-find-port` 查看）。
 
 ## 1. 遥操作测试
 
@@ -33,8 +29,6 @@ uv run lerobot-record \
   --display_data=true
 ```
 
-→ 下一段，← 重录当前段，Esc 结束。
-
 ## 3. 训练
 
 ```bash
@@ -47,8 +41,6 @@ uv run lerobot-train \
   --job_name=act_so101
 ```
 
-Mac 用 `mps`，有 NVIDIA GPU 用 `cuda`。
-
 ## 4. 评估
 
 ```bash
@@ -60,5 +52,3 @@ uv run lerobot-record \
   --dataset.single_task="Pick the cube and place it in the tray" \
   --policy.path=outputs/train/act_so101/checkpoints/last/pretrained_model
 ```
-
-可用 `../placement_success.py` 判定每次是否放进托盘。

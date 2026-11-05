@@ -6,3 +6,4 @@ pick_place_output/
 photos/
 .DS_Store
 outputs/
+*.pdf
