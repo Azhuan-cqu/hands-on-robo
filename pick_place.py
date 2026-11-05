@@ -156,7 +156,8 @@ def read_q(robot, names):
 
 def observe(cap, robot, scene, output):
     output.mkdir(parents=True, exist_ok=True)
-    print('Hold still with target object(s) visible. SPACE capture, Q/ESC cancel.')
+    if not scene.c.get('auto'):
+        print('Hold still with target object(s) visible. SPACE capture, Q/ESC cancel.')
     while True:
         ok, frame = cap.read()
         if not ok:
@@ -299,8 +300,6 @@ class Planner:
         self.lo, self.hi = np.minimum(self.lo, q0 - 1), np.maximum(self.hi, q0 + 1)
         self.clearance(q0)
         start = self.tcp(q0)
-        if start[2, 3] < safe_z:
-            print(f'Observation pose is low ({start[2,3]*1000:.0f} mm); align stage lifts to {safe_z*1000:.0f} mm first')
         candidates = []
         failures = []
         for yaw_offset in (0, np.pi/2, np.pi, 3*np.pi/2):
@@ -368,7 +367,6 @@ def execute(robot, planner, plan, obs, cap, out, scene):
         cum = np.r_[0, np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))]
         duration = max(.3, np.sum(np.max(np.abs(np.diff(pts, axis=0)), axis=1))/c['speed_deg_s'], abs(grip-oldgrip)/20)
         steps = max(2, int(np.ceil(duration*25)))
-        print(f'[{stage_name}] {duration:.1f}s, gripper -> {grip:.1f}', flush=True)
         for u in np.linspace(0, 1, steps+1)[1:]:
             s = 3*u*u-2*u*u*u
             cmd = target.copy() if cum[-1] == 0 else np.array([np.interp(s*cum[-1], cum, col) for col in pts.T])
@@ -379,14 +377,14 @@ def execute(robot, planner, plan, obs, cap, out, scene):
                 raise RuntimeError('Joint tracking error >8 deg')
             time.sleep(duration/steps)
         deadline = time.monotonic()+3
-        next_report = 0.0
         boosts, boosted = 0, target.copy()
         while True:
             measured, measured_grip = read_q(robot, names)
             err = measured - target
             worst = np.max(np.abs(err))
             grip_ok = not check_gripper or abs(measured_grip-grip) < 10
-            can_boost = worst < 4 and boosts < 3 and time.monotonic() < deadline
+            # Loaded and stretched out, the arm sags ~5 deg; compensate anything up to the 8 deg tracking limit.
+            can_boost = worst < 8 and boosts < 3 and time.monotonic() < deadline
             if grip_ok and (worst < 2 or (worst < 4 and not can_boost)):
                 break
             if can_boost:
@@ -396,13 +394,11 @@ def execute(robot, planner, plan, obs, cap, out, scene):
                 boosts += 1
                 time.sleep(.4)
                 continue
-            now = time.monotonic()
-            diff = dict(zip(names, np.round(err, 1).tolist())) | {'gripper': round(measured_grip - grip, 1)}
-            if now > deadline:
-                raise RuntimeError(f'[{stage_name}] Motion failed to settle within 3s; measured-target = {diff}')
-            if now >= next_report:
-                print(f'[{stage_name}] Waiting to settle; measured-target = {diff}', flush=True)
-                next_report = now + 1
+            if time.monotonic() > deadline:
+                # Continue anyway (operator's choice); the per-step 8 deg tracking check still guards the motion.
+                diff = dict(zip(names, np.round(err, 1).tolist())) | {'gripper': round(measured_grip - grip, 1)}
+                print(f'  [{stage_name}] not settled, continuing: measured-target = {diff}', flush=True)
+                break
             check_stop()
             time.sleep(.05)
     def close_until_contact():
@@ -422,34 +418,50 @@ def execute(robot, planner, plan, obs, cap, out, scene):
                 # gripper closes visibly further, which is what the pick-up check looks for.
                 command = max(c['gripper_closed'], actual - c['grip_squeeze'])
                 robot.bus.write('Goal_Position', 'gripper', command)
+                print(f'  contact at gripper {actual:.1f}, holding at {command:.1f}', flush=True)
                 event('contact', measured_opening=actual, held_command=command)
                 return actual, command
-            if actual <= c['gripper_closed'] + 2:
+            # Stalled near closed (fingers on each other, or a pinched sliver): stop before the servo overloads.
+            if actual <= c['gripper_closed'] + 2 or contact_candidate(history, command, -np.inf):
+                robot.bus.write('Goal_Position', 'gripper', actual)
                 event('empty_grasp', measured_opening=actual)
                 raise RuntimeError('Gripper reached closed endpoint: possible empty grasp; no lift')
             time.sleep(.05)
         raise RuntimeError('No stable contact before timeout; no lift')
+    def locate_cube(q_now):
+        """Median cube position (base frame) over several frames; None if fewer than 3 clean detections."""
+        seen = []
+        for _ in range(10):
+            check_stop()
+            found, _ = scene.detect(frame_last, q_now)
+            if 'cube' in found:
+                seen.append(np.array(found['cube']['T_base_object'])[:3, 3])
+        return np.median(seen, axis=0) if len(seen) >= 3 else None
     def refine(i):
         """Closed-loop correction above the cube (camera ~10 cm away, so hand-eye rotation error matters far less):
-        detect -> shift approach pose and all later stages in base xy -> detect again, until aligned."""
+        detect -> shift approach pose and all later stages in base xy -> detect again, while the error keeps shrinking."""
         cube_p = np.array(obs['targets']['cube']['T_base_object'])[:3, 3]
-        total = np.zeros(3)
+        total, last = np.zeros(3), np.inf
         for attempt in range(1, 4):
             time.sleep(.5)
-            for _ in range(5):
+            for _ in range(3):
                 check_stop()  # flush stale camera frames
             q_now = read_q(robot, names)[0]
-            found, _ = scene.detect(frame_last, q_now)
-            if 'cube' not in found:
-                print('Refine: cube not seen from approach pose; keeping current plan')
+            seen = locate_cube(q_now)
+            if seen is None:
+                print('  refine: cube not seen reliably, keeping current plan')
                 return
-            delta = np.r_[(np.array(found['cube']['T_base_object'])[:3, 3] - cube_p)[:2], 0.0]
-            print(f'Refine {attempt}/3: cube off by {np.round(delta*1000, 1).tolist()} mm in base xy')
+            delta = np.r_[(seen - cube_p)[:2], 0.0]
+            print(f'  refine {attempt}/3: off by {np.round(delta[:2]*1000, 1).tolist()} mm')
             if np.linalg.norm(delta) < .003:
-                print('Refine: aligned')
+                print('  refine: aligned')
+                return
+            if np.linalg.norm(delta) >= last:
+                # A correct move shrinks the error; growth means the views disagree (noise), so stop chasing it.
+                print('  refine: not converging, keeping current plan')
                 return
             if np.linalg.norm(total + delta) >= .06:
-                print('Refine: correction too large; keeping current plan')
+                print('  refine: correction too large, keeping current plan')
                 return
             stage = plan[i]
             here = np.array(stage['T_base_tcp'])
@@ -459,11 +471,11 @@ def execute(robot, planner, plan, obs, cap, out, scene):
                 rows, _ = planner.segment(here, there, q_now)
                 shifted = planner.refine(plan[:i] + [dict(stage, joints_deg=rows, T_base_tcp=there.tolist())] + plan[i+1:], delta)
             except ValueError as e:
-                print('Refine failed, keeping current plan:', e)
+                print('  refine failed, keeping current plan:', e)
                 return
             move(rows, stage['gripper'], 'refine', True)
             plan[:] = shifted
-            cube_p, total = cube_p + delta, total + delta
+            cube_p, total, last = cube_p + delta, total + delta, np.linalg.norm(delta)
             event('refine', delta_mm=(delta*1000).tolist(), total_mm=(total*1000).tolist())
 
     names = planner.fk.names
@@ -478,7 +490,7 @@ def execute(robot, planner, plan, obs, cap, out, scene):
         contact, held_grip = None, None
         for i in range(len(plan)):
             stage = plan[i]  # refine may replace later stages in place
-            print(f'Stage {i+1}/{len(plan)}: {stage["stage"]}', flush=True)
+            print(f'[{i+1}/{len(plan)}] {stage["stage"]}', flush=True)
             if stage['stage'] == 'grasp':
                 contact, held_grip = close_until_contact()
                 continue
@@ -585,12 +597,14 @@ def main():
     p.add_argument('--teach-tcp-click', action='store_true', help='Camera only: click the point between the fingertips; sets T_gripper_tcp translation')
     p.add_argument('--ignore-calibration-gate', action='store_true', help='Execute even if hand-eye consistency is poor (expect misses)')
     p.add_argument('--auto', action='store_true', help='No keypresses or confirmations: capture when still, run the plan straight through')
+    p.add_argument('--no-refine', action='store_true', help='Skip the second cube detection above the cube; grasp where first seen')
     a = p.parse_args()
     if sum([a.execute, a.scan_color, a.teach_tcp_click]) > 1:
         p.error('Choose only one mode')
     c = json.loads(a.config.read_text())
     c['pick_only'] = a.pick_only
     c['auto'] = a.auto
+    c['refine_at_approach'] = not a.no_refine
     if a.scan_color:
         return scan_color(c)
     if a.teach_tcp_click:
@@ -618,13 +632,14 @@ def main():
         planner = Planner(fk, c, robot.calibration)
         plan = planner.plan(obs)
         save_json(a.output/'plan.json', {'config': c, 'observation': obs, 'stages': plan})
-        for s in plan:
-            print(s['stage'], 'TCP m:', np.round(np.array(s['T_base_tcp'])[:3, 3], 4), 'samples:', len(s['joints_deg']))
+        if not a.auto:
+            for s in plan:
+                print(s['stage'], 'TCP m:', np.round(np.array(s['T_base_tcp'])[:3, 3], 4), 'samples:', len(s['joints_deg']))
         if not a.execute:
             print('Plan saved. No motion commands sent. Inspect plan and physical clearance before --execute.')
             return
-        print('Support arm during controller setup. Clear path/table/plate rim and check gripper geometry. Q/ESC in camera window or Ctrl-C stops commands and attempts hold.')
         if not a.auto:
+            print('Support arm during controller setup. Clear path/table/plate rim and check gripper geometry. Q/ESC in camera window or Ctrl-C stops commands and attempts hold.')
             if input('Scene unchanged and path reviewed? Type execute: ').strip() != 'execute':
                 return
             # Reject stale target positions after human review; plan must describe this observation.

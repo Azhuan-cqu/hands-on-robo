@@ -85,7 +85,7 @@
   ],
   "gripper_open": 90,
   "gripper_closed": 0,
-  "grip_squeeze": 10,
+  "grip_squeeze": 5,
   "clearance_m": 0.05,
   "link_radius_m": 0.035,
   "release_gap_mm": 3,
@@ -95,6 +95,5 @@
     0,
     0,
     -18
-  ],
-  "refine_at_approach": true
+  ]
 }

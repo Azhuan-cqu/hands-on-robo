@@ -31,7 +31,8 @@ uv run python pick_place.py --teach-tcp-click
 ## 4. 抓取
 
 ```bash
-uv run python pick_place.py --pick-only --execute --auto
+uv run python pick_place.py --pick-only --execute --auto              # 到方块上方再识别一次修正
+uv run python pick_place.py --pick-only --execute --auto --no-refine  # 不修正，按第一次识别直接抓
 ```
 
 `--scan-color` 预览检测，HSV 阈值在配置的 `cube`/`plate` 里。Q 或 Ctrl-C 停止，臂保持当前位置；托住臂再运行 `release_torque.py` 松开舵机。
